@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Dev (Next.js)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "NODE_OPTIONS='--inspect' npm run dev",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Attach (Next.js server)",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "restart": true,
+      "skipFiles": ["<node_internals>/**"],
+      "sourceMaps": true
+    },
+    {
+      "name": "Chrome: localhost",
+      "type": "pwa-chrome",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}",
+      "sourceMaps": true
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Dev (Next.js) + Chrome",
+      "configurations": ["Dev (Next.js)", "Chrome: localhost"]
+    }
+  ]
+}
