@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export function TopNav() {
   return (
-    <header className="sticky top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+    <header className="fixed inset-x-0 top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       <nav
         className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4 sm:px-6"
         aria-label="Main"
