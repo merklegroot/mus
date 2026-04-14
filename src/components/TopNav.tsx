@@ -1,12 +1,29 @@
+"use client";
+
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+const PAGE_TITLE: Record<string, string> = {
+  "/": "Home",
+  "/tube": "Tube",
+  "/data": "Data",
+};
 
 export function TopNav() {
+  const pathname = usePathname();
+  const title = PAGE_TITLE[pathname] ?? "";
+
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
       <nav
         className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4 sm:px-6"
         aria-label="Main"
       >
+        {title ? (
+          <h1 className="shrink-0 truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+            {title}
+          </h1>
+        ) : null}
         <Link
           href="/"
           className="text-sm font-medium text-zinc-950 underline-offset-4 hover:underline dark:text-zinc-50"

@@ -23,10 +23,6 @@ export default async function DataPage() {
 
   return (
     <main className="flex flex-1 flex-col items-center gap-6 px-4 py-10 lg:items-stretch lg:px-8">
-      <h1 className="text-center text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-        Data
-      </h1>
-
       <section className={`${panel} mx-auto`} aria-label="Library index state">
         <h2 className="mb-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">
           library_state
