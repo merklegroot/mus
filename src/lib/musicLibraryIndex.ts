@@ -57,6 +57,33 @@ export async function scanMp3Files(
   return out;
 }
 
+/** Count of regular .mp3 files on disk (same rules as {@link scanMp3Files}). */
+export async function countMp3FilesOnDisk(
+  musicFolderRealpath: string,
+): Promise<number> {
+  const names = (await readdir(musicFolderRealpath))
+    .filter(isSafeBasename)
+    .sort((a, b) => a.localeCompare(b));
+
+  let n = 0;
+  for (let i = 0; i < names.length; i += STAT_CONCURRENCY) {
+    const chunk = names.slice(i, i + STAT_CONCURRENCY);
+    const rows = await Promise.all(
+      chunk.map(async (name) => {
+        const full = path.join(musicFolderRealpath, name);
+        try {
+          const st = await stat(full);
+          return st.isFile() ? 1 : 0;
+        } catch {
+          return 0;
+        }
+      }),
+    );
+    for (const r of rows) n += r;
+  }
+  return n;
+}
+
 export function fingerprintEntries(entries: Mp3DiskEntry[]): string {
   const lines = entries.map(
     (e) => `${e.name}\t${e.mtimeMs}\t${e.sizeBytes}`,
@@ -102,7 +129,9 @@ export function listFilenamesFromDb(): string[] {
 }
 
 /**
- * If TTL has not expired and the indexed folder matches, return filenames from DB only (no disk scan).
+ * If TTL has not expired and the indexed folder matches, return filenames from DB only (no full scan).
+ * Also verifies the current on-disk .mp3 file count matches the index; otherwise returns null so a new
+ * file (or removal) on disk is picked up immediately instead of serving a stale DB-only list.
  */
 function trackRowCount(): number {
   const db = getDb();
@@ -110,9 +139,9 @@ function trackRowCount(): number {
   return row?.n ?? 0;
 }
 
-export function tryListFromDbCache(
+export async function tryListFromDbCache(
   musicFolderRealpath: string,
-): string[] | null {
+): Promise<string[] | null> {
   const ttl = listCacheTtlMs();
   if (ttl === 0) return null;
 
@@ -121,6 +150,11 @@ export function tryListFromDbCache(
   if (state.musicFolderRealpath !== musicFolderRealpath) return null;
   if (Date.now() - state.indexedAt > ttl) return null;
   if (trackRowCount() !== state.fileCount) return null;
+
+  const diskCount = await countMp3FilesOnDisk(musicFolderRealpath);
+  if (diskCount !== state.fileCount || diskCount !== trackRowCount()) {
+    return null;
+  }
 
   return listFilenamesFromDb();
 }
@@ -142,7 +176,7 @@ export async function listMusicLibraryMp3Names(): Promise<
 
   const folderReal = resolved.path;
 
-  const fromTtl = tryListFromDbCache(folderReal);
+  const fromTtl = await tryListFromDbCache(folderReal);
   if (fromTtl !== null) {
     return { ok: true, names: fromTtl };
   }
