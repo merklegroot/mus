@@ -2,10 +2,11 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { AlbumList } from "@/components/AlbumList";
 import { ArtistList } from "@/components/ArtistList";
 import { InferFromFilenamePanel } from "@/components/InferFromFilenamePanel";
 
-type SongRow = { filename: string; artist: string | null };
+type SongRow = { filename: string; artist: string | null; album: string | null };
 
 type Mp3ListState =
   | { status: "loading" }
@@ -30,14 +31,21 @@ function parseSongsResponse(data: unknown):
         typeof (item as { filename: unknown }).filename === "string"
       ) {
         const filename = (item as { filename: string }).filename;
-        const raw = (item as { artist?: unknown }).artist;
+        const rawArtist = (item as { artist?: unknown }).artist;
         const artist =
-          raw === null || raw === undefined
+          rawArtist === null || rawArtist === undefined
             ? null
-            : typeof raw === "string" && raw.trim() !== ""
-              ? raw.trim()
+            : typeof rawArtist === "string" && rawArtist.trim() !== ""
+              ? rawArtist.trim()
               : null;
-        songs.push({ filename, artist });
+        const rawAlbum = (item as { album?: unknown }).album;
+        const album =
+          rawAlbum === null || rawAlbum === undefined
+            ? null
+            : typeof rawAlbum === "string" && rawAlbum.trim() !== ""
+              ? rawAlbum.trim()
+              : null;
+        songs.push({ filename, artist, album });
       }
     }
     return { ok: true, songs };
@@ -47,7 +55,11 @@ function parseSongsResponse(data: unknown):
     const mp3s = d.mp3s.filter((n): n is string => typeof n === "string");
     return {
       ok: true,
-      songs: mp3s.map((filename) => ({ filename, artist: null })),
+      songs: mp3s.map((filename) => ({
+        filename,
+        artist: null,
+        album: null,
+      })),
     };
   }
 
@@ -60,6 +72,15 @@ function artistMatches(
 ): boolean {
   const a = songArtist?.trim() ?? "";
   const b = filterArtist.trim();
+  return a.length > 0 && a === b;
+}
+
+function albumMatches(
+  songAlbum: string | null,
+  filterAlbum: string,
+): boolean {
+  const a = songAlbum?.trim() ?? "";
+  const b = filterAlbum.trim();
   return a.length > 0 && a === b;
 }
 
@@ -124,16 +145,51 @@ function isMp3Details(data: unknown): data is Mp3Details {
 export function Mp3List() {
   const [state, setState] = useState<Mp3ListState>({ status: "loading" });
   const [filterArtist, setFilterArtist] = useState<string | null>(null);
+  const [filterAlbum, setFilterAlbum] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailState | null>(null);
 
   const visibleSongs = useMemo(() => {
     if (state.status !== "ready") return [];
-    if (!filterArtist) return state.songs;
-    return state.songs.filter((s) =>
-      artistMatches(s.artist, filterArtist),
-    );
+    return state.songs.filter((s) => {
+      if (filterArtist && !artistMatches(s.artist, filterArtist)) {
+        return false;
+      }
+      if (filterAlbum && !albumMatches(s.album, filterAlbum)) {
+        return false;
+      }
+      return true;
+    });
+  }, [state, filterArtist, filterAlbum]);
+
+  const albumList = useMemo(() => {
+    if (state.status !== "ready") return [];
+    const scope = filterArtist
+      ? state.songs.filter((s) => artistMatches(s.artist, filterArtist))
+      : state.songs;
+    const seen = new Set<string>();
+    for (const s of scope) {
+      const a = s.album?.trim();
+      if (a) seen.add(a);
+    }
+    return [...seen].sort((a, b) => a.localeCompare(b));
   }, [state, filterArtist]);
+
+  const albumListStatus: "loading" | "error" | "empty" | "ready" =
+    state.status === "loading"
+      ? "loading"
+      : state.status === "error"
+        ? "error"
+        : state.status === "empty"
+          ? "empty"
+          : "ready";
+
+  useEffect(() => {
+    if (!filterAlbum || state.status !== "ready") return;
+    if (!albumList.includes(filterAlbum)) {
+      setFilterAlbum(null);
+    }
+  }, [filterAlbum, albumList, state.status]);
 
   useEffect(() => {
     let cancelled = false;
@@ -185,16 +241,24 @@ export function Mp3List() {
     state.status === "ready" ? state.songs : null;
 
   useEffect(() => {
-    if (!filterArtist || !selected || !songsForFilter) return;
-    const stillVisible = songsForFilter.some(
-      (s) =>
-        s.filename === selected && artistMatches(s.artist, filterArtist),
-    );
+    if ((!filterArtist && !filterAlbum) || !selected || !songsForFilter) {
+      return;
+    }
+    const stillVisible = songsForFilter.some((s) => {
+      if (s.filename !== selected) return false;
+      if (filterArtist && !artistMatches(s.artist, filterArtist)) {
+        return false;
+      }
+      if (filterAlbum && !albumMatches(s.album, filterAlbum)) {
+        return false;
+      }
+      return true;
+    });
     if (!stillVisible) {
       setSelected(null);
       setDetail(null);
     }
-  }, [filterArtist, selected, songsForFilter]);
+  }, [filterArtist, filterAlbum, selected, songsForFilter]);
 
   useEffect(() => {
     if (!selected) return;
@@ -240,7 +304,7 @@ export function Mp3List() {
     "rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
 
   return (
-    <div className="grid w-full max-w-[100rem] grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3 lg:items-stretch">
+    <div className="grid w-full max-w-[120rem] grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-4 lg:items-stretch">
       <div
         className={`flex h-full min-h-0 min-w-0 flex-col lg:max-h-[min(90vh,56rem)] ${selected ? "max-lg:hidden" : ""}`}
       >
@@ -248,6 +312,21 @@ export function Mp3List() {
           selectedArtist={filterArtist}
           onArtistClick={(artist) => {
             setFilterArtist((prev) => (prev === artist ? null : artist));
+          }}
+        />
+      </div>
+
+      <div
+        className={`flex h-full min-h-0 min-w-0 flex-col lg:max-h-[min(90vh,56rem)] ${selected ? "max-lg:hidden" : ""}`}
+      >
+        <AlbumList
+          status={albumListStatus}
+          errorMessage={state.status === "error" ? state.message : undefined}
+          albums={albumList}
+          selectedAlbum={filterAlbum}
+          filterArtist={filterArtist}
+          onAlbumClick={(album) => {
+            setFilterAlbum((prev) => (prev === album ? null : album));
           }}
         />
       </div>
@@ -265,14 +344,22 @@ export function Mp3List() {
                 · {filterArtist}
               </span>
             ) : null}
+            {filterAlbum ? (
+              <span className="ml-1.5 font-normal text-zinc-500 dark:text-zinc-400">
+                · {filterAlbum}
+              </span>
+            ) : null}
           </h2>
-          {filterArtist ? (
+          {filterArtist || filterAlbum ? (
             <button
               type="button"
-              onClick={() => setFilterArtist(null)}
+              onClick={() => {
+                setFilterArtist(null);
+                setFilterAlbum(null);
+              }}
               className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
             >
-              Clear filter
+              Clear filters
             </button>
           ) : null}
         </div>
@@ -290,13 +377,16 @@ export function Mp3List() {
           <p className="text-sm text-zinc-500">No .mp3 files in this folder.</p>
         ) : visibleSongs.length === 0 ? (
           <p className="text-sm text-zinc-500">
-            No songs for this artist.{" "}
+            No songs match these filters.{" "}
             <button
               type="button"
               className="text-zinc-800 underline underline-offset-2 hover:text-zinc-950 dark:text-zinc-200 dark:hover:text-zinc-50"
-              onClick={() => setFilterArtist(null)}
+              onClick={() => {
+                setFilterArtist(null);
+                setFilterAlbum(null);
+              }}
             >
-              Clear filter
+              Clear filters
             </button>
           </p>
         ) : (

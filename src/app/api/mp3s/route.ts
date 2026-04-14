@@ -11,6 +11,8 @@ type SongListEntry = {
   filename: string;
   /** ID3 artist when present, otherwise primary filename inference (same merge as track details). */
   artist: string | null;
+  /** Cached ID3 album from DB (no filename inference). */
+  album: string | null;
 };
 
 function mergedArtistForFilename(
@@ -24,6 +26,11 @@ function mergedArtistForFilename(
   const inferred =
     inferArtistTitleFromFilename(filename).primary.artist?.trim() || null;
   return id3 ?? inferred;
+}
+
+function id3AlbumOnly(album: string | null | undefined): string | null {
+  if (typeof album !== "string" || album.trim() === "") return null;
+  return album.trim();
 }
 
 export async function GET() {
@@ -44,24 +51,38 @@ export async function GET() {
     }
 
     const db = getDb();
-    const artistByFile = new Map<string, string | null>();
+    const metaByFile = new Map<
+      string,
+      { artist: string | null; album: string | null }
+    >();
     const chunkSize = 400;
     for (let i = 0; i < names.length; i += chunkSize) {
       const slice = names.slice(i, i + chunkSize);
       const rows = db
-        .select({ filename: tracks.filename, artist: tracks.artist })
+        .select({
+          filename: tracks.filename,
+          artist: tracks.artist,
+          album: tracks.album,
+        })
         .from(tracks)
         .where(inArray(tracks.filename, slice))
         .all();
       for (const r of rows) {
-        artistByFile.set(r.filename, r.artist);
+        metaByFile.set(r.filename, {
+          artist: r.artist,
+          album: r.album,
+        });
       }
     }
 
-    const songs: SongListEntry[] = names.map((filename) => ({
-      filename,
-      artist: mergedArtistForFilename(filename, artistByFile.get(filename)),
-    }));
+    const songs: SongListEntry[] = names.map((filename) => {
+      const row = metaByFile.get(filename);
+      return {
+        filename,
+        artist: mergedArtistForFilename(filename, row?.artist),
+        album: id3AlbumOnly(row?.album),
+      };
+    });
 
     return NextResponse.json({ mp3s: names, songs });
   } catch (err) {
