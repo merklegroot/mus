@@ -396,7 +396,7 @@ export function InferFromFilenamePanel({
   return (
     <section
       className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700"
-      aria-label="Infer artist and title from filename"
+      aria-label="Edit track from filename"
     >
       <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
         Guess from filename
@@ -410,7 +410,7 @@ export function InferFromFilenamePanel({
         disabled={state.status === "loading"}
         className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
       >
-        {state.status === "loading" ? "Inferring…" : "Infer artist & title"}
+        {state.status === "loading" ? "Loading…" : "Edit"}
       </button>
 
       {dialogOpen ? (
