@@ -327,20 +327,20 @@ export function Mp3List() {
         className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-y-auto lg:max-h-[min(90vh,56rem)] ${selected ? "" : "max-lg:hidden"}`}
         aria-label="Track details"
       >
-        <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
+        <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
           <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
             Details
           </h2>
           {selected ? (
             <button
               type="button"
-              className="rounded-md px-2 py-1 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60 lg:hidden"
               onClick={() => {
                 setSelected(null);
                 setDetail(null);
               }}
+              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
             >
-              Back
+              Clear selection
             </button>
           ) : null}
         </div>
