@@ -19,9 +19,11 @@ function parseArtistsResponse(data: unknown): string[] | null {
 export function ArtistList({
   selectedArtist,
   onArtistClick,
+  onClearArtistFilter,
 }: {
   selectedArtist: string | null;
   onArtistClick: (artist: string) => void;
+  onClearArtistFilter: () => void;
 }) {
   const [state, setState] = useState<ArtistListState>({ status: "loading" });
 
@@ -72,9 +74,25 @@ export function ArtistList({
 
   return (
     <section className={panelClass} aria-label="Artists in library">
-      <h2 className="mb-3 shrink-0 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-        Artists
-      </h2>
+      <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          Artists
+          {selectedArtist ? (
+            <span className="ml-1.5 font-normal text-zinc-500 dark:text-zinc-400">
+              · {selectedArtist}
+            </span>
+          ) : null}
+        </h2>
+        {selectedArtist ? (
+          <button
+            type="button"
+            onClick={onClearArtistFilter}
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+          >
+            Clear filter
+          </button>
+        ) : null}
+      </div>
       {state.status === "loading" ? (
         <p className="text-sm text-zinc-500">Loading…</p>
       ) : state.status === "error" ? (

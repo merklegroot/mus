@@ -19,11 +19,6 @@ export function TopNav() {
         className="mx-auto flex h-14 max-w-5xl items-center gap-6 px-4 sm:px-6"
         aria-label="Main"
       >
-        {title ? (
-          <h1 className="shrink-0 truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-            {title}
-          </h1>
-        ) : null}
         <Link
           href="/"
           className="text-sm font-medium text-zinc-950 underline-offset-4 hover:underline dark:text-zinc-50"
@@ -42,6 +37,11 @@ export function TopNav() {
         >
           Data
         </Link>
+        {title ? (
+          <h1 className="ml-auto min-w-0 truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+            {title}
+          </h1>
+        ) : null}
       </nav>
     </header>
   );

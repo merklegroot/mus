@@ -5,6 +5,7 @@ import { useEffect, useMemo, useState } from "react";
 import { AlbumList } from "@/components/AlbumList";
 import { ArtistList } from "@/components/ArtistList";
 import { InferFromFilenamePanel } from "@/components/InferFromFilenamePanel";
+import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
 
 type SongRow = { filename: string; artist: string | null; album: string | null };
 
@@ -66,13 +67,17 @@ function parseSongsResponse(data: unknown):
   return { ok: false, message: "Invalid response" };
 }
 
-function artistMatches(
-  songArtist: string | null,
-  filterArtist: string,
-): boolean {
-  const a = songArtist?.trim() ?? "";
-  const b = filterArtist.trim();
-  return a.length > 0 && a === b;
+/** Match /api/artists semantics: ID3 artist or filename inference counts. */
+function songMatchesArtistFilter(s: SongRow, filterArtist: string): boolean {
+  const want = filterArtist.trim();
+  if (want === "") return false;
+
+  const merged = s.artist?.trim() ?? "";
+  if (merged === want) return true;
+
+  const inferred =
+    inferArtistTitleFromFilename(s.filename).primary.artist?.trim() ?? "";
+  return inferred === want;
 }
 
 function albumMatches(
@@ -152,7 +157,7 @@ export function Mp3List() {
   const visibleSongs = useMemo(() => {
     if (state.status !== "ready") return [];
     return state.songs.filter((s) => {
-      if (filterArtist && !artistMatches(s.artist, filterArtist)) {
+      if (filterArtist && !songMatchesArtistFilter(s, filterArtist)) {
         return false;
       }
       if (filterAlbum && !albumMatches(s.album, filterAlbum)) {
@@ -165,7 +170,7 @@ export function Mp3List() {
   const albumList = useMemo(() => {
     if (state.status !== "ready") return [];
     const scope = filterArtist
-      ? state.songs.filter((s) => artistMatches(s.artist, filterArtist))
+      ? state.songs.filter((s) => songMatchesArtistFilter(s, filterArtist))
       : state.songs;
     const seen = new Set<string>();
     for (const s of scope) {
@@ -246,7 +251,7 @@ export function Mp3List() {
     }
     const stillVisible = songsForFilter.some((s) => {
       if (s.filename !== selected) return false;
-      if (filterArtist && !artistMatches(s.artist, filterArtist)) {
+      if (filterArtist && !songMatchesArtistFilter(s, filterArtist)) {
         return false;
       }
       if (filterAlbum && !albumMatches(s.album, filterAlbum)) {
@@ -313,6 +318,7 @@ export function Mp3List() {
           onArtistClick={(artist) => {
             setFilterArtist((prev) => (prev === artist ? null : artist));
           }}
+          onClearArtistFilter={() => setFilterArtist(null)}
         />
       </div>
 
@@ -328,6 +334,7 @@ export function Mp3List() {
           onAlbumClick={(album) => {
             setFilterAlbum((prev) => (prev === album ? null : album));
           }}
+          onClearAlbumFilter={() => setFilterAlbum(null)}
         />
       </div>
 

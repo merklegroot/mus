@@ -8,6 +8,7 @@ type AlbumListProps = {
   albums: string[];
   selectedAlbum: string | null;
   onAlbumClick: (album: string) => void;
+  onClearAlbumFilter: () => void;
   /** When set, albums are scoped to this artist; used only for empty copy. */
   filterArtist: string | null;
 };
@@ -18,6 +19,7 @@ export function AlbumList({
   albums,
   selectedAlbum,
   onAlbumClick,
+  onClearAlbumFilter,
   filterArtist,
 }: AlbumListProps) {
   const panelClass =
@@ -25,9 +27,25 @@ export function AlbumList({
 
   return (
     <section className={panelClass} aria-label="Albums in library">
-      <h2 className="mb-3 shrink-0 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-        Albums
-      </h2>
+      <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+        <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          Albums
+          {selectedAlbum ? (
+            <span className="ml-1.5 font-normal text-zinc-500 dark:text-zinc-400">
+              · {selectedAlbum}
+            </span>
+          ) : null}
+        </h2>
+        {selectedAlbum ? (
+          <button
+            type="button"
+            onClick={onClearAlbumFilter}
+            className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+          >
+            Clear filter
+          </button>
+        ) : null}
+      </div>
       {status === "loading" ? (
         <p className="text-sm text-zinc-500">Loading…</p>
       ) : status === "error" ? (
