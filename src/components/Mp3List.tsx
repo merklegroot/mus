@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import { useEffect, useState } from "react";
+import { ArtistList } from "@/components/ArtistList";
 import { InferFromFilenamePanel } from "@/components/InferFromFilenamePanel";
 
 type Mp3ListState =
@@ -171,14 +172,20 @@ export function Mp3List() {
     "rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
 
   return (
-    <div className="flex w-full max-w-5xl flex-col gap-6 lg:flex-row lg:items-stretch">
+    <div className="grid w-full max-w-[100rem] grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-3 lg:items-stretch">
+      <div
+        className={`flex h-full min-h-0 min-w-0 flex-col lg:max-h-[min(90vh,56rem)] ${selected ? "max-lg:hidden" : ""}`}
+      >
+        <ArtistList />
+      </div>
+
       <section
-        className={`${panelClass} ${selected ? "hidden lg:block" : ""} lg:max-w-md lg:flex-shrink-0 lg:basis-[min(28rem,40%)]`}
+        className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col lg:max-h-[min(90vh,56rem)] ${selected ? "max-lg:hidden" : ""}`}
         aria-label="MP3 files in music folder"
         aria-busy={state.status === "loading"}
       >
-        <h2 className="mb-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          MP3 files
+        <h2 className="mb-3 shrink-0 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          Files
         </h2>
         {state.status === "loading" ? (
           <p className="text-sm text-zinc-500">Loading…</p>
@@ -193,7 +200,7 @@ export function Mp3List() {
         ) : state.status === "empty" ? (
           <p className="text-sm text-zinc-500">No .mp3 files in this folder.</p>
         ) : (
-          <ul className="max-h-[min(24rem,50vh)] space-y-0.5 overflow-y-auto text-sm">
+          <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm">
             {state.mp3s.map((name, idx) => (
               <li key={`${name}:${idx}`}>
                 <button
@@ -217,10 +224,10 @@ export function Mp3List() {
       </section>
 
       <aside
-        className={`${panelClass} ${!selected ? "hidden lg:block" : ""} lg:min-w-0 lg:flex-1`}
+        className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-y-auto lg:max-h-[min(90vh,56rem)] ${selected ? "" : "max-lg:hidden"}`}
         aria-label="Track details"
       >
-        <div className="mb-3 flex items-center justify-between gap-3">
+        <div className="mb-3 flex shrink-0 items-center justify-between gap-3">
           <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
             Details
           </h2>

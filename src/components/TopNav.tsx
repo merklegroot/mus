@@ -19,6 +19,12 @@ export function TopNav() {
         >
           Tube
         </Link>
+        <Link
+          href="/data"
+          className="text-sm font-medium text-zinc-950 underline-offset-4 hover:underline dark:text-zinc-50"
+        >
+          Data
+        </Link>
       </nav>
     </header>
   );

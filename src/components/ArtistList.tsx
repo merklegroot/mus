@@ -62,11 +62,11 @@ export function ArtistList() {
   }, []);
 
   const panelClass =
-    "w-full max-w-5xl rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
+    "flex h-full min-h-0 w-full min-w-0 flex-col rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
 
   return (
     <section className={panelClass} aria-label="Artists in library">
-      <h2 className="mb-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+      <h2 className="mb-3 shrink-0 text-sm font-medium text-zinc-800 dark:text-zinc-200">
         Artists
       </h2>
       {state.status === "loading" ? (
@@ -80,9 +80,9 @@ export function ArtistList() {
           No artists from ID3 tags or inferred from filenames in this folder.
         </p>
       ) : (
-        <ul className="columns-2 gap-x-8 text-sm text-zinc-800 sm:columns-3 md:columns-4 dark:text-zinc-200">
+        <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm text-zinc-800 dark:text-zinc-200">
           {state.artists.map((name) => (
-            <li key={name} className="break-words py-0.5 pr-2">
+            <li key={name} className="break-words py-0.5 pr-1">
               {name}
             </li>
           ))}

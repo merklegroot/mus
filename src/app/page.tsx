@@ -1,4 +1,3 @@
-import { ArtistList } from "@/components/ArtistList";
 import { Mp3List } from "@/components/Mp3List";
 
 export default function Home() {
@@ -7,7 +6,6 @@ export default function Home() {
       <h1 className="text-center text-3xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
         Home
       </h1>
-      <ArtistList />
       <Mp3List />
     </main>
   );
