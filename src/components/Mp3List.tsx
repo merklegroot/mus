@@ -1,15 +1,67 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { ArtistList } from "@/components/ArtistList";
 import { InferFromFilenamePanel } from "@/components/InferFromFilenamePanel";
+
+type SongRow = { filename: string; artist: string | null };
 
 type Mp3ListState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "empty" }
-  | { status: "ready"; mp3s: string[] };
+  | { status: "ready"; songs: SongRow[] };
+
+function parseSongsResponse(data: unknown):
+  | { ok: true; songs: SongRow[] }
+  | { ok: false; message: string } {
+  if (typeof data !== "object" || data === null) {
+    return { ok: false, message: "Invalid response" };
+  }
+  const d = data as Record<string, unknown>;
+
+  if (Array.isArray(d.songs)) {
+    const songs: SongRow[] = [];
+    for (const item of d.songs) {
+      if (
+        typeof item === "object" &&
+        item !== null &&
+        typeof (item as { filename: unknown }).filename === "string"
+      ) {
+        const filename = (item as { filename: string }).filename;
+        const raw = (item as { artist?: unknown }).artist;
+        const artist =
+          raw === null || raw === undefined
+            ? null
+            : typeof raw === "string" && raw.trim() !== ""
+              ? raw.trim()
+              : null;
+        songs.push({ filename, artist });
+      }
+    }
+    return { ok: true, songs };
+  }
+
+  if (Array.isArray(d.mp3s)) {
+    const mp3s = d.mp3s.filter((n): n is string => typeof n === "string");
+    return {
+      ok: true,
+      songs: mp3s.map((filename) => ({ filename, artist: null })),
+    };
+  }
+
+  return { ok: false, message: "Invalid response" };
+}
+
+function artistMatches(
+  songArtist: string | null,
+  filterArtist: string,
+): boolean {
+  const a = songArtist?.trim() ?? "";
+  const b = filterArtist.trim();
+  return a.length > 0 && a === b;
+}
 
 type Mp3Details = {
   filename: string;
@@ -71,8 +123,17 @@ function isMp3Details(data: unknown): data is Mp3Details {
 
 export function Mp3List() {
   const [state, setState] = useState<Mp3ListState>({ status: "loading" });
+  const [filterArtist, setFilterArtist] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailState | null>(null);
+
+  const visibleSongs = useMemo(() => {
+    if (state.status !== "ready") return [];
+    if (!filterArtist) return state.songs;
+    return state.songs.filter((s) =>
+      artistMatches(s.artist, filterArtist),
+    );
+  }, [state, filterArtist]);
 
   useEffect(() => {
     let cancelled = false;
@@ -94,24 +155,16 @@ export function Mp3List() {
           return;
         }
 
-        if (
-          typeof data !== "object" ||
-          data === null ||
-          !("mp3s" in data) ||
-          !Array.isArray((data as { mp3s: unknown }).mp3s)
-        ) {
-          setState({ status: "error", message: "Invalid response" });
+        const parsed = parseSongsResponse(data);
+        if (!parsed.ok) {
+          setState({ status: "error", message: parsed.message });
           return;
         }
 
-        const mp3s = (data as { mp3s: unknown[] }).mp3s.filter(
-          (n): n is string => typeof n === "string",
-        );
-
-        if (mp3s.length === 0) {
+        if (parsed.songs.length === 0) {
           setState({ status: "empty" });
         } else {
-          setState({ status: "ready", mp3s });
+          setState({ status: "ready", songs: parsed.songs });
         }
       })
       .catch((err) => {
@@ -127,6 +180,21 @@ export function Mp3List() {
       cancelled = true;
     };
   }, []);
+
+  const songsForFilter =
+    state.status === "ready" ? state.songs : null;
+
+  useEffect(() => {
+    if (!filterArtist || !selected || !songsForFilter) return;
+    const stillVisible = songsForFilter.some(
+      (s) =>
+        s.filename === selected && artistMatches(s.artist, filterArtist),
+    );
+    if (!stillVisible) {
+      setSelected(null);
+      setDetail(null);
+    }
+  }, [filterArtist, selected, songsForFilter]);
 
   useEffect(() => {
     if (!selected) return;
@@ -176,17 +244,38 @@ export function Mp3List() {
       <div
         className={`flex h-full min-h-0 min-w-0 flex-col lg:max-h-[min(90vh,56rem)] ${selected ? "max-lg:hidden" : ""}`}
       >
-        <ArtistList />
+        <ArtistList
+          selectedArtist={filterArtist}
+          onArtistClick={(artist) => {
+            setFilterArtist((prev) => (prev === artist ? null : artist));
+          }}
+        />
       </div>
 
       <section
         className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col lg:max-h-[min(90vh,56rem)] ${selected ? "max-lg:hidden" : ""}`}
-        aria-label="MP3 files in music folder"
+        aria-label="Songs in music folder"
         aria-busy={state.status === "loading"}
       >
-        <h2 className="mb-3 shrink-0 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-          Files
-        </h2>
+        <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+          <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+            Songs
+            {filterArtist ? (
+              <span className="ml-1.5 font-normal text-zinc-500 dark:text-zinc-400">
+                · {filterArtist}
+              </span>
+            ) : null}
+          </h2>
+          {filterArtist ? (
+            <button
+              type="button"
+              onClick={() => setFilterArtist(null)}
+              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            >
+              Clear filter
+            </button>
+          ) : null}
+        </div>
         {state.status === "loading" ? (
           <p className="text-sm text-zinc-500">Loading…</p>
         ) : state.status === "error" ? (
@@ -199,23 +288,34 @@ export function Mp3List() {
           </p>
         ) : state.status === "empty" ? (
           <p className="text-sm text-zinc-500">No .mp3 files in this folder.</p>
+        ) : visibleSongs.length === 0 ? (
+          <p className="text-sm text-zinc-500">
+            No songs for this artist.{" "}
+            <button
+              type="button"
+              className="text-zinc-800 underline underline-offset-2 hover:text-zinc-950 dark:text-zinc-200 dark:hover:text-zinc-50"
+              onClick={() => setFilterArtist(null)}
+            >
+              Clear filter
+            </button>
+          </p>
         ) : (
           <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm">
-            {state.mp3s.map((name, idx) => (
-              <li key={`${name}:${idx}`}>
+            {visibleSongs.map((row, idx) => (
+              <li key={`${row.filename}:${idx}`}>
                 <button
                   type="button"
                   onClick={() => {
-                    setSelected(name);
+                    setSelected(row.filename);
                     setDetail({ status: "loading" });
                   }}
                   className={`w-full rounded-md px-2 py-2 text-left break-all transition-colors ${
-                    selected === name
+                    selected === row.filename
                       ? "bg-zinc-200 font-medium text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
                       : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
                   }`}
                 >
-                  {name}
+                  {row.filename}
                 </button>
               </li>
             ))}
@@ -261,18 +361,23 @@ export function Mp3List() {
             </audio>
             <InferFromFilenamePanel
               filename={selected}
-              onRenamed={(newFilename) => {
-                setState((prev) => {
-                  if (prev.status !== "ready") return prev;
-                  const idx = prev.mp3s.indexOf(selected);
-                  if (idx < 0) return prev;
-                  const next = prev.mp3s.slice();
-                  next[idx] = newFilename;
-                  next.sort((a, b) => a.localeCompare(b));
-                  return { status: "ready", mp3s: next };
-                });
+              onRenamed={async (newFilename) => {
                 setSelected(newFilename);
                 setDetail({ status: "loading" });
+                try {
+                  const res = await fetch("/api/mp3s");
+                  const data: unknown = await res.json();
+                  if (!res.ok) return;
+                  const parsed = parseSongsResponse(data);
+                  if (!parsed.ok) return;
+                  if (parsed.songs.length === 0) {
+                    setState({ status: "empty" });
+                  } else {
+                    setState({ status: "ready", songs: parsed.songs });
+                  }
+                } catch {
+                  /* keep previous list */
+                }
               }}
             />
             {!detail || detail.status === "loading" ? (

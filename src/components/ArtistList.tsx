@@ -16,7 +16,13 @@ function parseArtistsResponse(data: unknown): string[] | null {
   return raw.filter((a): a is string => typeof a === "string");
 }
 
-export function ArtistList() {
+export function ArtistList({
+  selectedArtist,
+  onArtistClick,
+}: {
+  selectedArtist: string | null;
+  onArtistClick: (artist: string) => void;
+}) {
   const [state, setState] = useState<ArtistListState>({ status: "loading" });
 
   useEffect(() => {
@@ -83,7 +89,17 @@ export function ArtistList() {
         <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm text-zinc-800 dark:text-zinc-200">
           {state.artists.map((name) => (
             <li key={name} className="break-words py-0.5 pr-1">
-              {name}
+              <button
+                type="button"
+                onClick={() => onArtistClick(name)}
+                className={`w-full rounded-md px-2 py-1.5 text-left transition-colors ${
+                  selectedArtist === name
+                    ? "bg-zinc-200 font-medium text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
+                    : "text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
+                }`}
+              >
+                {name}
+              </button>
             </li>
           ))}
         </ul>
