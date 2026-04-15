@@ -61,12 +61,20 @@ function formatTs(ms: number): string {
 
 export default async function ArtistDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ slug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const { slug } = await params;
   const libraryArtistName = decodeArtistSlug(slug).trim();
   if (!libraryArtistName) notFound();
+
+  const sp = (await searchParams) ?? {};
+  const releasesModeRaw = sp.releases;
+  const releasesMode =
+    Array.isArray(releasesModeRaw) ? releasesModeRaw[0] : releasesModeRaw;
+  const disableReleasesFilter = releasesMode === "all";
 
   const db = getDb();
   const row = db
@@ -144,6 +152,7 @@ export default async function ArtistDetailPage({
               discogsId={row.discogsId}
               fetchedAt={row.fetchedAt}
               releasesRow={releasesRow ?? null}
+              disableReleasesFilter={disableReleasesFilter}
             />
           </div>
         )}
@@ -158,12 +167,14 @@ function DiscogsArtistBody({
   discogsId,
   fetchedAt,
   releasesRow,
+  disableReleasesFilter,
 }: {
   libraryArtistName: string;
   dataJson: string;
   discogsId: number;
   fetchedAt: number;
   releasesRow: (typeof discogsArtistReleases.$inferSelect) | null;
+  disableReleasesFilter: boolean;
 }) {
   const payload = parseDiscogsArtistJson(dataJson);
   const discogsName = payload?.name?.trim() || "—";
@@ -332,6 +343,7 @@ function DiscogsArtistBody({
       <DiscogsReleasesSection
         libraryArtistName={libraryArtistName}
         releasesRow={releasesRow}
+        disableFilter={disableReleasesFilter}
       />
 
       <details className="rounded-md border border-zinc-200 dark:border-zinc-800">
@@ -349,30 +361,45 @@ function DiscogsArtistBody({
 function DiscogsReleasesSection({
   libraryArtistName,
   releasesRow,
+  disableFilter,
 }: {
   libraryArtistName: string;
   releasesRow: (typeof discogsArtistReleases.$inferSelect) | null;
+  disableFilter: boolean;
 }) {
   const parsed = releasesRow ? parseStoredReleasesJson(releasesRow.dataJson) : null;
   const list = parsed?.releases ?? [];
-  const excludedFormats = new Set(["tour", "single", "promo"]);
-  const hasExcludedFormat = (format: string | null): boolean => {
-    if (!format) return false;
-    const tokens = format
-      .split(/[,/;+|]/g)
-      .map((t) => t.trim().toLowerCase())
-      .filter(Boolean);
-    return tokens.some((t) => excludedFormats.has(t));
+  const isPrimaryStudioAlbum = (r: {
+    role: string | null;
+    type: string;
+    title: string;
+    format: string | null;
+  }): boolean => {
+    if ((r.role ?? "").trim().toLowerCase() !== "main") return false;
+    if (r.type.trim().toLowerCase() !== "master") return false;
+
+    const title = (r.title || "").toLowerCase().trim();
+    const formats = (r.format ?? "").toLowerCase();
+
+    // Blacklist common non-studio stuff
+    const blacklist =
+      /(live|tour|bootleg|unplugged|compilation|best of|greatest|lost dogs|rearviewmirror|benaroya|the last of us|soundtrack|rarities|remaster|reissue|deluxe|anniversary|single|ep|promo)/i;
+
+    if (blacklist.test(title) || blacklist.test(formats)) return false;
+
+    // Must look like a full album (not a single or short EP)
+    const looksLikeAlbum =
+      /album|lp|cd|vinyl|full length/i.test(formats) ||
+      !/(single|ep|7"|12"|45)/i.test(formats);
+
+    return looksLikeAlbum;
   };
-  const filtered = list.filter((item) => {
-    const typeOk = item.type.trim().toLowerCase() === "release";
-    const roleOk = (item.role ?? "").trim().toLowerCase() === "main";
-    const formatOk = !hasExcludedFormat(item.format);
-    return typeOk && roleOk && formatOk;
-  });
+
+  const defaultFiltered = list.filter(isPrimaryStudioAlbum);
+  const shown = disableFilter ? list : defaultFiltered;
 
   const db = getDb();
-  const keys = filtered.map((item) => {
+  const keys = shown.map((item) => {
     const type = item.type.toLowerCase() === "master" ? "master" : "release";
     return `${type}:${item.id}`;
   });
@@ -401,7 +428,7 @@ function DiscogsReleasesSection({
           </h3>
           {releasesRow ? (
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {filtered.length} shown · {list.length} loaded
+              {shown.length} shown · {list.length} loaded
               {parsed && parsed.items > list.length
                 ? ` · Discogs reports ${parsed.items} total`
                 : parsed && parsed.items > 0
@@ -417,6 +444,18 @@ function DiscogsReleasesSection({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {releasesRow ? (
+            <Link
+              href={
+                disableFilter
+                  ? `/artist/${encodeURIComponent(libraryArtistName)}`
+                  : `/artist/${encodeURIComponent(libraryArtistName)}?releases=all`
+              }
+              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
+            >
+              {disableFilter ? "Use default filter" : "Show all"}
+            </Link>
+          ) : null}
           {!releasesRow ? (
             <DiscogsReleasesFetchControl
               artist={libraryArtistName}
@@ -438,13 +477,13 @@ function DiscogsReleasesSection({
         </p>
       ) : null}
 
-      {list.length > 0 && filtered.length === 0 ? (
+      {list.length > 0 && !disableFilter && defaultFiltered.length === 0 ? (
         <p className="text-sm text-zinc-600 dark:text-zinc-400">
           No items match the default filter (type = release, role = main).
         </p>
       ) : null}
 
-      {filtered.length > 0 ? (
+      {shown.length > 0 ? (
         <div className="max-h-[min(50vh,28rem)] overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800">
           <table className="w-full min-w-[56rem] border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
@@ -460,7 +499,7 @@ function DiscogsReleasesSection({
               </tr>
             </thead>
             <tbody>
-              {filtered.map((item, index) => (
+              {shown.map((item, index) => (
                 <tr
                   key={`${item.type}-${item.id}-${index}`}
                   className="border-b border-zinc-100 odd:bg-white even:bg-zinc-50/80 dark:border-zinc-800/80 dark:odd:bg-zinc-950 dark:even:bg-zinc-900/50"
