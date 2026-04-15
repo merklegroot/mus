@@ -18,6 +18,7 @@ import {
 import {
   discogsWebUrlForListItem,
   parseStoredReleasesJson,
+  selectPrimaryStudioAlbums,
 } from "@/lib/discogsReleasesPayload";
 import { parseStoredTracklistJson } from "@/lib/discogsTracklistPayload";
 
@@ -369,33 +370,7 @@ function DiscogsReleasesSection({
 }) {
   const parsed = releasesRow ? parseStoredReleasesJson(releasesRow.dataJson) : null;
   const list = parsed?.releases ?? [];
-  const isPrimaryStudioAlbum = (r: {
-    role: string | null;
-    type: string;
-    title: string;
-    format: string | null;
-  }): boolean => {
-    if ((r.role ?? "").trim().toLowerCase() !== "main") return false;
-    if (r.type.trim().toLowerCase() !== "master") return false;
-
-    const title = (r.title || "").toLowerCase().trim();
-    const formats = (r.format ?? "").toLowerCase();
-
-    // Blacklist common non-studio stuff
-    const blacklist =
-      /(live|tour|bootleg|unplugged|compilation|best of|greatest|lost dogs|rearviewmirror|benaroya|the last of us|soundtrack|rarities|remaster|reissue|deluxe|anniversary|single|ep|promo)/i;
-
-    if (blacklist.test(title) || blacklist.test(formats)) return false;
-
-    // Must look like a full album (not a single or short EP)
-    const looksLikeAlbum =
-      /album|lp|cd|vinyl|full length/i.test(formats) ||
-      !/(single|ep|7"|12"|45)/i.test(formats);
-
-    return looksLikeAlbum;
-  };
-
-  const defaultFiltered = list.filter(isPrimaryStudioAlbum);
+  const defaultFiltered = selectPrimaryStudioAlbums(list);
   const shown = disableFilter ? list : defaultFiltered;
 
   const db = getDb();
@@ -505,7 +480,9 @@ function DiscogsReleasesSection({
                   className="border-b border-zinc-100 odd:bg-white even:bg-zinc-50/80 dark:border-zinc-800/80 dark:odd:bg-zinc-950 dark:even:bg-zinc-900/50"
                 >
                   <td className="whitespace-nowrap px-2 py-1.5 text-zinc-700 dark:text-zinc-300">
-                    {item.year ?? "—"}
+                    {"canonicalYear" in item
+                      ? ((item.canonicalYear as number | null) ?? "—")
+                      : item.year ?? "—"}
                   </td>
                   <td className="max-w-[18rem] px-2 py-1.5">
                     <a
@@ -514,7 +491,7 @@ function DiscogsReleasesSection({
                       rel="noopener noreferrer"
                       className="font-medium text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-100"
                     >
-                      {item.title}
+                      {"cleanTitle" in item ? (item.cleanTitle as string) : item.title}
                     </a>
                   </td>
                   <td className="whitespace-nowrap px-2 py-1.5 text-zinc-600 dark:text-zinc-400">
