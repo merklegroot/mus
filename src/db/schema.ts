@@ -50,3 +50,16 @@ export const discogsArtists = sqliteTable("discogs_artists", {
 
 export type DiscogsArtistRow = typeof discogsArtists.$inferSelect;
 export type NewDiscogsArtistRow = typeof discogsArtists.$inferInsert;
+
+/**
+ * Cached GET /artists/{id}/releases (all pages merged) for a library artist.
+ */
+export const discogsArtistReleases = sqliteTable("discogs_artist_releases", {
+  libraryArtistName: text("library_artist_name").primaryKey(),
+  discogsArtistId: integer("discogs_artist_id").notNull(),
+  dataJson: text("data_json").notNull(),
+  fetchedAt: integer("fetched_at", { mode: "number" }).notNull(),
+});
+
+export type DiscogsArtistReleasesRow = typeof discogsArtistReleases.$inferSelect;
+export type NewDiscogsArtistReleasesRow = typeof discogsArtistReleases.$inferInsert;

@@ -97,3 +97,90 @@ export async function discogsFetchArtistById(id: number): Promise<unknown> {
     throw new Error("Discogs artist response was not JSON");
   }
 }
+
+const RELEASES_PER_PAGE = 100;
+/** Guardrail for very large discographies. */
+const RELEASES_MAX_PAGES = 250;
+
+function discogsPagination(data: unknown): {
+  page: number;
+  pages: number;
+  items: number;
+  perPage: number;
+} | null {
+  if (!isRecord(data)) return null;
+  const p = data.pagination;
+  if (!isRecord(p)) return null;
+  const page = typeof p.page === "number" && Number.isFinite(p.page) ? p.page : 1;
+  const pages = typeof p.pages === "number" && Number.isFinite(p.pages) ? p.pages : 1;
+  const items = typeof p.items === "number" && Number.isFinite(p.items) ? p.items : 0;
+  const perPage =
+    typeof p.per_page === "number" && Number.isFinite(p.per_page) ? p.per_page : RELEASES_PER_PAGE;
+  return { page, pages: Math.max(1, pages), items, perPage };
+}
+
+function releasesArray(data: unknown): unknown[] {
+  if (!isRecord(data)) return [];
+  const r = data.releases;
+  return Array.isArray(r) ? r : [];
+}
+
+export async function discogsFetchArtistReleasesPage(
+  artistId: number,
+  page: number,
+): Promise<unknown> {
+  const url = new URL(`${DISCOGS_ORIGIN}/artists/${artistId}/releases`);
+  url.searchParams.set("page", String(page));
+  url.searchParams.set("per_page", String(RELEASES_PER_PAGE));
+  url.searchParams.set("sort", "year");
+  url.searchParams.set("sort_order", "desc");
+
+  const res = await fetch(url.toString(), { headers: discogsRequestHeaders() });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Discogs artist releases failed (${res.status}): ${text.slice(0, 200)}`,
+    );
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error("Discogs releases response was not JSON");
+  }
+}
+
+/**
+ * Fetches every page of /artists/{id}/releases and returns one merged list.
+ */
+export async function discogsFetchAllArtistReleases(artistId: number): Promise<{
+  releases: unknown[];
+  items: number;
+  pagesFetched: number;
+  perPage: number;
+}> {
+  const first = await discogsFetchArtistReleasesPage(artistId, 1);
+  const pag = discogsPagination(first);
+  if (!pag) {
+    const only = releasesArray(first);
+    return {
+      releases: only,
+      items: only.length,
+      pagesFetched: 1,
+      perPage: RELEASES_PER_PAGE,
+    };
+  }
+
+  const merged: unknown[] = [...releasesArray(first)];
+  const totalPages = Math.min(pag.pages, RELEASES_MAX_PAGES);
+  for (let p = 2; p <= totalPages; p++) {
+    const pageData = await discogsFetchArtistReleasesPage(artistId, p);
+    merged.push(...releasesArray(pageData));
+  }
+
+  return {
+    releases: merged,
+    items: pag.items,
+    pagesFetched: totalPages,
+    perPage: pag.perPage,
+  };
+}

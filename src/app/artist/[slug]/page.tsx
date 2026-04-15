@@ -3,12 +3,17 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { eq } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { discogsArtists } from "@/db/schema";
+import { discogsArtistReleases, discogsArtists } from "@/db/schema";
 import { DiscogsFetchControl } from "@/components/DiscogsFetchControl";
+import { DiscogsReleasesFetchControl } from "@/components/DiscogsReleasesFetchControl";
 import {
   parseDiscogsArtistJson,
   primaryDiscogsImage,
 } from "@/lib/discogsArtistPayload";
+import {
+  discogsWebUrlForListItem,
+  parseStoredReleasesJson,
+} from "@/lib/discogsReleasesPayload";
 
 export const dynamic = "force-dynamic";
 
@@ -63,6 +68,13 @@ export default async function ArtistDetailPage({
     .from(discogsArtists)
     .where(eq(discogsArtists.libraryArtistName, libraryArtistName))
     .get();
+  const releasesRow = row
+    ? db
+        .select()
+        .from(discogsArtistReleases)
+        .where(eq(discogsArtistReleases.libraryArtistName, libraryArtistName))
+        .get()
+    : undefined;
 
   const panel =
     "w-full max-w-3xl rounded-lg border border-zinc-200 bg-zinc-50/80 p-6 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
@@ -92,7 +104,8 @@ export default async function ArtistDetailPage({
           <div className="space-y-4 text-sm text-zinc-700 dark:text-zinc-300">
             <p>
               No Discogs profile is stored for this name yet. Load it from
-              Discogs to show biography, images, members, and links.
+              Discogs to show biography, images, members, and links. After
+              that, you can load this artist&apos;s releases from the same page.
             </p>
             <DiscogsFetchControl
               artist={libraryArtistName}
@@ -124,6 +137,7 @@ export default async function ArtistDetailPage({
               dataJson={row.dataJson}
               discogsId={row.discogsId}
               fetchedAt={row.fetchedAt}
+              releasesRow={releasesRow ?? null}
             />
           </div>
         )}
@@ -137,11 +151,13 @@ function DiscogsArtistBody({
   dataJson,
   discogsId,
   fetchedAt,
+  releasesRow,
 }: {
   libraryArtistName: string;
   dataJson: string;
   discogsId: number;
   fetchedAt: number;
+  releasesRow: (typeof discogsArtistReleases.$inferSelect) | null;
 }) {
   const payload = parseDiscogsArtistJson(dataJson);
   const discogsName = payload?.name?.trim() || "—";
@@ -296,6 +312,11 @@ function DiscogsArtistBody({
         </section>
       ) : null}
 
+      <DiscogsReleasesSection
+        libraryArtistName={libraryArtistName}
+        releasesRow={releasesRow}
+      />
+
       <details className="rounded-md border border-zinc-200 dark:border-zinc-800">
         <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
           Raw JSON
@@ -305,5 +326,117 @@ function DiscogsArtistBody({
         </pre>
       </details>
     </div>
+  );
+}
+
+function DiscogsReleasesSection({
+  libraryArtistName,
+  releasesRow,
+}: {
+  libraryArtistName: string;
+  releasesRow: (typeof discogsArtistReleases.$inferSelect) | null;
+}) {
+  const parsed = releasesRow ? parseStoredReleasesJson(releasesRow.dataJson) : null;
+  const list = parsed?.releases ?? [];
+
+  return (
+    <section className="border-t border-zinc-200 pt-8 dark:border-zinc-800">
+      <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+        <div>
+          <h3 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+            Releases (Discogs)
+          </h3>
+          {releasesRow ? (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              {list.length} loaded
+              {parsed && parsed.items > list.length
+                ? ` · Discogs reports ${parsed.items} total`
+                : parsed && parsed.items > 0
+                  ? ` · ${parsed.items} reported`
+                  : ""}
+              {" · "}
+              fetched {formatTs(releasesRow.fetchedAt)}
+            </p>
+          ) : (
+            <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+              Fetch the discography from Discogs and store it in SQLite.
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          {!releasesRow ? (
+            <DiscogsReleasesFetchControl
+              artist={libraryArtistName}
+              label="Load releases from Discogs"
+            />
+          ) : (
+            <DiscogsReleasesFetchControl
+              artist={libraryArtistName}
+              label="Refresh releases"
+              secondary
+            />
+          )}
+        </div>
+      </div>
+
+      {releasesRow && list.length === 0 ? (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          No release rows were returned (unexpected empty list).
+        </p>
+      ) : null}
+
+      {list.length > 0 ? (
+        <div className="max-h-[min(50vh,28rem)] overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800">
+          <table className="w-full min-w-[44rem] border-collapse text-left text-xs">
+            <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
+              <tr>
+                {["Year", "Title", "Type", "Format", "Label", "Role"].map((c) => (
+                  <th
+                    key={c}
+                    className="whitespace-nowrap px-2 py-2 font-medium text-zinc-700 dark:text-zinc-300"
+                  >
+                    {c}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {list.map((item) => (
+                <tr
+                  key={`${item.type}-${item.id}`}
+                  className="border-b border-zinc-100 odd:bg-white even:bg-zinc-50/80 dark:border-zinc-800/80 dark:odd:bg-zinc-950 dark:even:bg-zinc-900/50"
+                >
+                  <td className="whitespace-nowrap px-2 py-1.5 text-zinc-700 dark:text-zinc-300">
+                    {item.year ?? "—"}
+                  </td>
+                  <td className="max-w-[18rem] px-2 py-1.5">
+                    <a
+                      href={discogsWebUrlForListItem(item)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-medium text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-100"
+                    >
+                      {item.title}
+                    </a>
+                  </td>
+                  <td className="whitespace-nowrap px-2 py-1.5 text-zinc-600 dark:text-zinc-400">
+                    {item.type}
+                  </td>
+                  <td className="max-w-[12rem] break-words px-2 py-1.5 text-zinc-700 dark:text-zinc-300">
+                    {item.format ?? "—"}
+                  </td>
+                  <td className="max-w-[10rem] break-words px-2 py-1.5 text-zinc-700 dark:text-zinc-300">
+                    {item.label ?? "—"}
+                  </td>
+                  <td className="max-w-[8rem] break-words px-2 py-1.5 text-zinc-600 dark:text-zinc-400">
+                    {item.role ?? "—"}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
+    </section>
   );
 }
