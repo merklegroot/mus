@@ -476,6 +476,22 @@ export function Mp3List() {
                   /* keep previous list */
                 }
               }}
+              onTagsSaved={async () => {
+                try {
+                  const res = await fetch("/api/mp3s");
+                  const data: unknown = await res.json();
+                  if (!res.ok) return;
+                  const parsed = parseSongsResponse(data);
+                  if (!parsed.ok) return;
+                  if (parsed.songs.length === 0) {
+                    setState({ status: "empty" });
+                  } else {
+                    setState({ status: "ready", songs: parsed.songs });
+                  }
+                } catch {
+                  /* keep previous list */
+                }
+              }}
             />
             {!detail || detail.status === "loading" ? (
               <p className="text-sm text-zinc-500">Loading…</p>

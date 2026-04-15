@@ -86,9 +86,12 @@ function extLowerCommon(filename: string): string {
 export function InferFromFilenamePanel({
   filename,
   onRenamed,
+  onTagsSaved,
 }: {
   filename: string;
   onRenamed?: (newFilename: string) => void;
+  /** Called after ID3 tags are written successfully (file + server cache). */
+  onTagsSaved?: () => void;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [state, setState] = useState<InferState>({ status: "idle" });
@@ -317,6 +320,7 @@ export function InferFromFilenamePanel({
         return;
       }
       setTagStatus({ status: "done" });
+      onTagsSaved?.();
 
       // Refresh details after writing tags.
       setDetails({ status: "loading" });

@@ -1,5 +1,9 @@
+import { stat } from "node:fs/promises";
+import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import NodeID3 from "node-id3";
+import { getDb } from "@/db/client";
+import { tracks } from "@/db/schema";
 import { resolveMusicMp3 } from "@/lib/resolveMusicMp3";
 import { syncId3v1TrackNumberIfPresent } from "@/lib/syncId3v1Track";
 
@@ -38,6 +42,58 @@ function asNullableInt(v: unknown): number | null {
 function optionalIntField(obj: Record<string, unknown>, key: string): number | null | undefined {
   if (!(key in obj)) return undefined;
   return asNullableInt(obj[key]);
+}
+
+/** Keep SQLite cache in sync so GET /api/mp3s (album/artist lists) reflects ID3 edits immediately. */
+async function syncTrackCacheAfterTagWrite(
+  filename: string,
+  absolutePath: string,
+  partial: {
+    title: string | null | undefined;
+    artist: string | null | undefined;
+    album: string | null | undefined;
+    genre: string | null | undefined;
+    year: number | null | undefined;
+  },
+) {
+  try {
+    const st = await stat(absolutePath);
+    const db = getDb();
+    const existing = db.select().from(tracks).where(eq(tracks.filename, filename)).get();
+    const sizeBytes = st.size;
+    const mtimeMs = Math.trunc(st.mtimeMs);
+    const now = Date.now();
+    const merged = {
+      title: partial.title === undefined ? existing?.title ?? null : partial.title,
+      artist: partial.artist === undefined ? existing?.artist ?? null : partial.artist,
+      album: partial.album === undefined ? existing?.album ?? null : partial.album,
+      genre: partial.genre === undefined ? existing?.genre ?? null : partial.genre,
+      year: partial.year === undefined ? existing?.year ?? null : partial.year,
+      durationSec: existing?.durationSec ?? null,
+      bitrateKbps: existing?.bitrateKbps ?? null,
+      codec: existing?.codec ?? null,
+    };
+    db.insert(tracks)
+      .values({
+        filename,
+        sizeBytes,
+        mtimeMs,
+        ...merged,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: tracks.filename,
+        set: {
+          sizeBytes,
+          mtimeMs,
+          ...merged,
+          updatedAt: now,
+        },
+      })
+      .run();
+  } catch {
+    /* cache is optional */
+  }
 }
 
 export async function PATCH(
@@ -103,6 +159,14 @@ export async function PATCH(
     if (trackNumber !== undefined) {
       await syncId3v1TrackNumberIfPresent(resolved.absolutePath, trackNumber);
     }
+
+    await syncTrackCacheAfterTagWrite(resolved.segment, resolved.absolutePath, {
+      title,
+      artist,
+      album,
+      genre,
+      year,
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     return NextResponse.json({ error: msg }, { status: 500 });
