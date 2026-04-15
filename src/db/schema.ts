@@ -36,3 +36,17 @@ export const tracks = sqliteTable("tracks", {
 
 export type Track = typeof tracks.$inferSelect;
 export type NewTrack = typeof tracks.$inferInsert;
+
+/**
+ * Cached Discogs artist payload for a library artist name (from tags / filename inference).
+ * Keyed by the exact string shown in the Artists panel (trimmed).
+ */
+export const discogsArtists = sqliteTable("discogs_artists", {
+  libraryArtistName: text("library_artist_name").primaryKey(),
+  discogsId: integer("discogs_id").notNull(),
+  dataJson: text("data_json").notNull(),
+  fetchedAt: integer("fetched_at", { mode: "number" }).notNull(),
+});
+
+export type DiscogsArtistRow = typeof discogsArtists.$inferSelect;
+export type NewDiscogsArtistRow = typeof discogsArtists.$inferInsert;

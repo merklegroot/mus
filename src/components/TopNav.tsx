@@ -9,9 +9,22 @@ const PAGE_TITLE: Record<string, string> = {
   "/data": "Data",
 };
 
+function titleForPath(pathname: string | null): string {
+  if (!pathname) return "";
+  if (pathname.startsWith("/artist/")) {
+    const raw = pathname.slice("/artist/".length);
+    try {
+      return decodeURIComponent(raw).trim() || "Artist";
+    } catch {
+      return "Artist";
+    }
+  }
+  return PAGE_TITLE[pathname] ?? "";
+}
+
 export function TopNav() {
   const pathname = usePathname();
-  const title = PAGE_TITLE[pathname] ?? "";
+  const title = titleForPath(pathname);
 
   return (
     <header className="fixed inset-x-0 top-0 z-50 border-b border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
