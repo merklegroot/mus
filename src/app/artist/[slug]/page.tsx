@@ -401,9 +401,9 @@ function DiscogsReleasesSection({
               </tr>
             </thead>
             <tbody>
-              {list.map((item) => (
+              {list.map((item, index) => (
                 <tr
-                  key={`${item.type}-${item.id}`}
+                  key={`${item.type}-${item.id}-${index}`}
                   className="border-b border-zinc-100 odd:bg-white even:bg-zinc-50/80 dark:border-zinc-800/80 dark:odd:bg-zinc-950 dark:even:bg-zinc-900/50"
                 >
                   <td className="whitespace-nowrap px-2 py-1.5 text-zinc-700 dark:text-zinc-300">
