@@ -355,10 +355,20 @@ function DiscogsReleasesSection({
 }) {
   const parsed = releasesRow ? parseStoredReleasesJson(releasesRow.dataJson) : null;
   const list = parsed?.releases ?? [];
+  const excludedFormats = new Set(["tour", "single", "promo"]);
+  const hasExcludedFormat = (format: string | null): boolean => {
+    if (!format) return false;
+    const tokens = format
+      .split(/[,/;+|]/g)
+      .map((t) => t.trim().toLowerCase())
+      .filter(Boolean);
+    return tokens.some((t) => excludedFormats.has(t));
+  };
   const filtered = list.filter((item) => {
     const typeOk = item.type.trim().toLowerCase() === "release";
     const roleOk = (item.role ?? "").trim().toLowerCase() === "main";
-    return typeOk && roleOk;
+    const formatOk = !hasExcludedFormat(item.format);
+    return typeOk && roleOk && formatOk;
   });
 
   const db = getDb();
