@@ -98,6 +98,38 @@ export async function discogsFetchArtistById(id: number): Promise<unknown> {
   }
 }
 
+export async function discogsFetchReleaseById(id: number): Promise<unknown> {
+  const url = `${DISCOGS_ORIGIN}/releases/${id}`;
+  const res = await fetch(url, { headers: discogsRequestHeaders() });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Discogs release fetch failed (${res.status}): ${text.slice(0, 200)}`,
+    );
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error("Discogs release response was not JSON");
+  }
+}
+
+export async function discogsFetchMasterById(id: number): Promise<unknown> {
+  const url = `${DISCOGS_ORIGIN}/masters/${id}`;
+  const res = await fetch(url, { headers: discogsRequestHeaders() });
+  const text = await res.text();
+  if (!res.ok) {
+    throw new Error(
+      `Discogs master fetch failed (${res.status}): ${text.slice(0, 200)}`,
+    );
+  }
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new Error("Discogs master response was not JSON");
+  }
+}
+
 const RELEASES_PER_PAGE = 100;
 /** Guardrail for very large discographies. */
 const RELEASES_MAX_PAGES = 250;

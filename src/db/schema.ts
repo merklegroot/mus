@@ -63,3 +63,20 @@ export const discogsArtistReleases = sqliteTable("discogs_artist_releases", {
 
 export type DiscogsArtistReleasesRow = typeof discogsArtistReleases.$inferSelect;
 export type NewDiscogsArtistReleasesRow = typeof discogsArtistReleases.$inferInsert;
+
+/**
+ * Cached Discogs release/master payload for tracklist display.
+ * Key format: "{type}:{id}" where type is "release" or "master".
+ */
+export const discogsReleaseTracklists = sqliteTable("discogs_release_tracklists", {
+  key: text("key").primaryKey(),
+  discogsId: integer("discogs_id").notNull(),
+  type: text("type").notNull(),
+  dataJson: text("data_json").notNull(),
+  fetchedAt: integer("fetched_at", { mode: "number" }).notNull(),
+});
+
+export type DiscogsReleaseTracklistRow =
+  typeof discogsReleaseTracklists.$inferSelect;
+export type NewDiscogsReleaseTracklistRow =
+  typeof discogsReleaseTracklists.$inferInsert;

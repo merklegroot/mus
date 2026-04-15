@@ -157,6 +157,32 @@ export function Mp3List() {
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
 
+  async function refreshSongs(): Promise<void> {
+    const res = await fetch("/api/mp3s");
+    const data: unknown = await res.json();
+    if (!res.ok) {
+      const message =
+        typeof data === "object" &&
+        data !== null &&
+        "error" in data &&
+        typeof (data as { error: unknown }).error === "string"
+          ? (data as { error: string }).error
+          : res.statusText;
+      setState({ status: "error", message });
+      return;
+    }
+    const parsed = parseSongsResponse(data);
+    if (!parsed.ok) {
+      setState({ status: "error", message: parsed.message });
+      return;
+    }
+    if (parsed.songs.length === 0) {
+      setState({ status: "empty" });
+    } else {
+      setState({ status: "ready", songs: parsed.songs });
+    }
+  }
+
   const visibleSongs = useMemo(() => {
     if (state.status !== "ready") return [];
     return state.songs.filter((s) => {
@@ -208,35 +234,7 @@ export function Mp3List() {
   useEffect(() => {
     let cancelled = false;
 
-    fetch("/api/mp3s")
-      .then(async (res) => {
-        const data: unknown = await res.json();
-        if (cancelled) return;
-
-        if (!res.ok) {
-          const message =
-            typeof data === "object" &&
-            data !== null &&
-            "error" in data &&
-            typeof (data as { error: unknown }).error === "string"
-              ? (data as { error: string }).error
-              : res.statusText;
-          setState({ status: "error", message });
-          return;
-        }
-
-        const parsed = parseSongsResponse(data);
-        if (!parsed.ok) {
-          setState({ status: "error", message: parsed.message });
-          return;
-        }
-
-        if (parsed.songs.length === 0) {
-          setState({ status: "empty" });
-        } else {
-          setState({ status: "ready", songs: parsed.songs });
-        }
-      })
+    refreshSongs()
       .catch((err) => {
         if (!cancelled) {
           setState({
@@ -323,6 +321,7 @@ export function Mp3List() {
         className={`flex h-full min-h-0 min-w-0 flex-col lg:max-h-[min(90vh,56rem)] ${selected ? "max-lg:hidden" : ""}`}
       >
         <ArtistList
+          showDiscogsActions={false}
           selectedArtist={filterArtist}
           onArtistClick={(artist) => {
             setFilterArtist((prev) => (prev === artist ? null : artist));
@@ -466,37 +465,20 @@ export function Mp3List() {
               Your browser does not support the audio element.
             </audio>
             <InferFromFilenamePanel
+              key={`infer-${selected}`}
               filename={selected}
               onRenamed={async (newFilename) => {
                 setSelected(newFilename);
                 setDetail({ status: "loading" });
                 try {
-                  const res = await fetch("/api/mp3s");
-                  const data: unknown = await res.json();
-                  if (!res.ok) return;
-                  const parsed = parseSongsResponse(data);
-                  if (!parsed.ok) return;
-                  if (parsed.songs.length === 0) {
-                    setState({ status: "empty" });
-                  } else {
-                    setState({ status: "ready", songs: parsed.songs });
-                  }
+                  await refreshSongs();
                 } catch {
                   /* keep previous list */
                 }
               }}
               onTagsSaved={async () => {
                 try {
-                  const res = await fetch("/api/mp3s");
-                  const data: unknown = await res.json();
-                  if (!res.ok) return;
-                  const parsed = parseSongsResponse(data);
-                  if (!parsed.ok) return;
-                  if (parsed.songs.length === 0) {
-                    setState({ status: "empty" });
-                  } else {
-                    setState({ status: "ready", songs: parsed.songs });
-                  }
+                  await refreshSongs();
                 } catch {
                   /* keep previous list */
                 }

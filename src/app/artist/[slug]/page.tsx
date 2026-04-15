@@ -1,11 +1,16 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { eq } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { discogsArtistReleases, discogsArtists } from "@/db/schema";
+import {
+  discogsArtistReleases,
+  discogsArtists,
+  discogsReleaseTracklists,
+} from "@/db/schema";
 import { DiscogsFetchControl } from "@/components/DiscogsFetchControl";
 import { DiscogsReleasesFetchControl } from "@/components/DiscogsReleasesFetchControl";
+import { DiscogsTracklistFetchControl } from "@/components/DiscogsTracklistFetchControl";
 import {
   parseDiscogsArtistJson,
   primaryDiscogsImage,
@@ -14,6 +19,7 @@ import {
   discogsWebUrlForListItem,
   parseStoredReleasesJson,
 } from "@/lib/discogsReleasesPayload";
+import { parseStoredTracklistJson } from "@/lib/discogsTracklistPayload";
 
 export const dynamic = "force-dynamic";
 
@@ -339,6 +345,27 @@ function DiscogsReleasesSection({
   const parsed = releasesRow ? parseStoredReleasesJson(releasesRow.dataJson) : null;
   const list = parsed?.releases ?? [];
 
+  const db = getDb();
+  const keys = list.map((item) => {
+    const type = item.type.toLowerCase() === "master" ? "master" : "release";
+    return `${type}:${item.id}`;
+  });
+  const cachedRows =
+    keys.length === 0
+      ? []
+      : db
+          .select({
+            key: discogsReleaseTracklists.key,
+            dataJson: discogsReleaseTracklists.dataJson,
+            fetchedAt: discogsReleaseTracklists.fetchedAt,
+          })
+          .from(discogsReleaseTracklists)
+          .where(inArray(discogsReleaseTracklists.key, keys))
+          .all();
+  const cachedByKey = new Map(
+    cachedRows.map((r) => [r.key, { dataJson: r.dataJson, fetchedAt: r.fetchedAt }]),
+  );
+
   return (
     <section className="border-t border-zinc-200 pt-8 dark:border-zinc-800">
       <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
@@ -387,10 +414,10 @@ function DiscogsReleasesSection({
 
       {list.length > 0 ? (
         <div className="max-h-[min(50vh,28rem)] overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800">
-          <table className="w-full min-w-[44rem] border-collapse text-left text-xs">
+          <table className="w-full min-w-[56rem] border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
               <tr>
-                {["Year", "Title", "Type", "Format", "Label", "Role"].map((c) => (
+                {["Year", "Title", "Type", "Format", "Label", "Role", "Tracks"].map((c) => (
                   <th
                     key={c}
                     className="whitespace-nowrap px-2 py-2 font-medium text-zinc-700 dark:text-zinc-300"
@@ -431,6 +458,15 @@ function DiscogsReleasesSection({
                   <td className="max-w-[8rem] break-words px-2 py-1.5 text-zinc-600 dark:text-zinc-400">
                     {item.role ?? "—"}
                   </td>
+                  <td className="px-2 py-1.5 align-top">
+                    <DiscogsTracklistCell
+                      id={item.id}
+                      type={item.type.toLowerCase() === "master" ? "master" : "release"}
+                      cached={cachedByKey.get(
+                        `${item.type.toLowerCase() === "master" ? "master" : "release"}:${item.id}`,
+                      )}
+                    />
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -438,5 +474,29 @@ function DiscogsReleasesSection({
         </div>
       ) : null}
     </section>
+  );
+}
+
+function DiscogsTracklistCell({
+  id,
+  type,
+  cached,
+}: {
+  id: number;
+  type: "release" | "master";
+  cached?: { dataJson: string; fetchedAt: number };
+}) {
+  const parsed = cached ? parseStoredTracklistJson(cached.dataJson) : null;
+  const count = parsed?.tracklist?.length ?? 0;
+  return (
+    <div className="flex flex-col items-start gap-1">
+      <DiscogsTracklistFetchControl id={id} type={type} secondary={!!cached} />
+      {cached ? (
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-400">
+          {count > 0 ? `${count} tracks` : "Cached"} ·{" "}
+          {new Date(cached.fetchedAt).toLocaleDateString()}
+        </p>
+      ) : null}
+    </div>
   );
 }

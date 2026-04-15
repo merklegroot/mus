@@ -9,13 +9,6 @@ import { syncId3v1TrackNumberIfPresent } from "@/lib/syncId3v1Track";
 
 export const dynamic = "force-dynamic";
 
-function asNullableString(v: unknown): string | null {
-  if (v === null) return null;
-  if (typeof v !== "string") return null;
-  const t = v.trim();
-  return t.length > 0 ? t : null;
-}
-
 function optionalStringField(obj: Record<string, unknown>, key: string): string | null | undefined {
   if (!(key in obj)) return undefined;
   const v = obj[key];

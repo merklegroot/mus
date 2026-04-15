@@ -142,25 +142,6 @@ export function InferFromFilenamePanel({
     }
   }, [dialogOpen]);
 
-  useEffect(() => {
-    // Reset when selection changes.
-    setState({ status: "idle" });
-    setDetails({ status: "idle" });
-    setRenameValue("");
-    setRenameStatus({ status: "idle" });
-    setTagDraft({
-      trackNumber: "",
-      title: "",
-      artist: "",
-      album: "",
-      year: "",
-      genre: "",
-      comments: "",
-    });
-    setTagStatus({ status: "idle" });
-    setDialogOpen(false);
-  }, [filename]);
-
   async function runInfer() {
     setState({ status: "loading" });
     setDetails({ status: "loading" });
