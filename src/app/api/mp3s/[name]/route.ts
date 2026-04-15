@@ -1,10 +1,12 @@
 import type { Stats } from "node:fs";
+import { unlink } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { parseFile } from "music-metadata";
 import { getDb } from "@/db/client";
 import { tracks } from "@/db/schema";
 import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
+import { touchLibraryIndexStamp } from "@/lib/musicLibraryIndex";
 import { resolveMusicMp3 } from "@/lib/resolveMusicMp3";
 
 export const dynamic = "force-dynamic";
@@ -399,4 +401,39 @@ export async function GET(
       },
     ),
   );
+}
+
+export async function DELETE(
+  _request: Request,
+  context: { params: Promise<{ name: string }> },
+) {
+  const { name } = await context.params;
+  const resolved = await resolveMusicMp3(name);
+
+  if (!resolved.ok) {
+    return NextResponse.json(
+      { error: resolved.error },
+      { status: resolved.status },
+    );
+  }
+
+  const { absolutePath, segment } = resolved;
+
+  try {
+    await unlink(absolutePath);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+
+  try {
+    const db = getDb();
+    db.delete(tracks).where(eq(tracks.filename, segment)).run();
+  } catch {
+    /* cache is optional */
+  }
+
+  touchLibraryIndexStamp();
+
+  return NextResponse.json({ ok: true });
 }

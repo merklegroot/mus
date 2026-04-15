@@ -45,7 +45,16 @@ export function parseDiscogsArtistJson(dataJson: string): DiscogsArtistPayload |
     if (typeof raw.profile === "string") out.profile = raw.profile;
 
     if (Array.isArray(raw.urls)) {
-      out.urls = raw.urls.filter((u): u is string => typeof u === "string");
+      const seen = new Set<string>();
+      const urls: string[] = [];
+      for (const u of raw.urls) {
+        if (typeof u !== "string") continue;
+        const t = u.trim();
+        if (!t || seen.has(t)) continue;
+        seen.add(t);
+        urls.push(t);
+      }
+      if (urls.length) out.urls = urls;
     }
 
     if (Array.isArray(raw.images)) {
