@@ -179,144 +179,155 @@ function DiscogsArtistBody({
 
   return (
     <div className="flex flex-col gap-8">
-      <p className="text-xs text-zinc-500 dark:text-zinc-400">
-        Cached from Discogs · artist id {discogsId} · fetched {formatTs(fetchedAt)}
-      </p>
-
-      {discogsUri ? (
-        <p>
-          <a
-            href={discogsUri}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="text-sm font-medium text-zinc-900 underline-offset-4 hover:underline dark:text-zinc-100"
-          >
-            Open on Discogs.com
-          </a>
-        </p>
-      ) : null}
-
-      <section className="flex flex-col gap-4 sm:flex-row sm:items-start">
-        {heroSrc ? (
-          <div className="h-40 w-40 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
-            {/* eslint-disable-next-line @next/next/no-img-element -- Discogs CDN URLs; avoid remotePatterns on Image */}
-            <img
-              src={heroSrc}
-              alt={discogsName}
-              className="h-full w-full object-cover"
-              loading="lazy"
-              referrerPolicy="no-referrer"
-            />
-          </div>
-        ) : null}
-        <div className="min-w-0 flex-1">
-          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-            Discogs
+      <details className="rounded-md border border-zinc-200 dark:border-zinc-800">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          Discogs artist info
+          <span className="ml-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">
+            {discogsName !== "—" ? discogsName : ""} · cached {formatTs(fetchedAt)}
+          </span>
+        </summary>
+        <div className="space-y-6 border-t border-zinc-200 p-4 dark:border-zinc-800">
+          <p className="text-xs text-zinc-500 dark:text-zinc-400">
+            Cached from Discogs · artist id {discogsId} · fetched{" "}
+            {formatTs(fetchedAt)}
           </p>
-          <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
-            {discogsName}
-          </h2>
-          {discogsName !== libraryArtistName ? (
-            <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
-              Library name: {libraryArtistName}
+
+          {discogsUri ? (
+            <p>
+              <a
+                href={discogsUri}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-sm font-medium text-zinc-900 underline-offset-4 hover:underline dark:text-zinc-100"
+              >
+                Open on Discogs.com
+              </a>
             </p>
           ) : null}
+
+          <section className="flex flex-col gap-4 sm:flex-row sm:items-start">
+            {heroSrc ? (
+              <div className="h-40 w-40 shrink-0 overflow-hidden rounded-lg border border-zinc-200 bg-zinc-100 dark:border-zinc-700 dark:bg-zinc-800">
+                {/* eslint-disable-next-line @next/next/no-img-element -- Discogs CDN URLs; avoid remotePatterns on Image */}
+                <img
+                  src={heroSrc}
+                  alt={discogsName}
+                  className="h-full w-full object-cover"
+                  loading="lazy"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
+            ) : null}
+            <div className="min-w-0 flex-1">
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                Discogs
+              </p>
+              <h2 className="text-xl font-semibold text-zinc-950 dark:text-zinc-50">
+                {discogsName}
+              </h2>
+              {discogsName !== libraryArtistName ? (
+                <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+                  Library name: {libraryArtistName}
+                </p>
+              ) : null}
+            </div>
+          </section>
+
+          {profile ? (
+            <section>
+              <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Profile
+              </h3>
+              <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
+                {profile}
+              </p>
+            </section>
+          ) : null}
+
+          {urls.length > 0 ? (
+            <section>
+              <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Links
+              </h3>
+              <ul className="list-inside list-disc space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
+                {urls.map((u) => (
+                  <li key={u} className="break-all">
+                    <a
+                      href={u}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-100"
+                    >
+                      {u}
+                    </a>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {members.length > 0 ? (
+            <section>
+              <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Members
+              </h3>
+              <ul className="divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+                {members.map((m, i) => (
+                  <li
+                    key={m.id != null ? String(m.id) : `member-${i}`}
+                    className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2 text-sm"
+                  >
+                    <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                      {m.name ?? "—"}
+                    </span>
+                    {typeof m.active === "boolean" ? (
+                      <span className="text-xs text-zinc-500 dark:text-zinc-400">
+                        {m.active ? "Active" : "Past"}
+                      </span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {aliases.length > 0 ? (
+            <section>
+              <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Aliases
+              </h3>
+              <ul className="flex flex-wrap gap-2 text-sm text-zinc-800 dark:text-zinc-200">
+                {aliases.map((a) => (
+                  <li
+                    key={a.id ?? a.name}
+                    className="rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
+                  >
+                    {a.name ?? "—"}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
+
+          {namevariations.length > 0 ? (
+            <section>
+              <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                Name variations
+              </h3>
+              <ul className="flex flex-wrap gap-2 text-sm text-zinc-700 dark:text-zinc-300">
+                {namevariations.map((n) => (
+                  <li
+                    key={n}
+                    className="rounded-md border border-zinc-200 px-2 py-1 dark:border-zinc-700"
+                  >
+                    {n}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ) : null}
         </div>
-      </section>
-
-      {profile ? (
-        <section>
-          <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            Profile
-          </h3>
-          <p className="whitespace-pre-wrap text-sm leading-relaxed text-zinc-700 dark:text-zinc-300">
-            {profile}
-          </p>
-        </section>
-      ) : null}
-
-      {urls.length > 0 ? (
-        <section>
-          <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            Links
-          </h3>
-          <ul className="list-inside list-disc space-y-1 text-sm text-zinc-700 dark:text-zinc-300">
-            {urls.map((u) => (
-              <li key={u} className="break-all">
-                <a
-                  href={u}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-zinc-900 underline-offset-2 hover:underline dark:text-zinc-100"
-                >
-                  {u}
-                </a>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {members.length > 0 ? (
-        <section>
-          <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            Members
-          </h3>
-          <ul className="divide-y divide-zinc-200 rounded-md border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-            {members.map((m, i) => (
-              <li
-                key={m.id != null ? String(m.id) : `member-${i}`}
-                className="flex flex-wrap items-baseline justify-between gap-2 px-3 py-2 text-sm"
-              >
-                <span className="font-medium text-zinc-900 dark:text-zinc-100">
-                  {m.name ?? "—"}
-                </span>
-                {typeof m.active === "boolean" ? (
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    {m.active ? "Active" : "Past"}
-                  </span>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {aliases.length > 0 ? (
-        <section>
-          <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            Aliases
-          </h3>
-          <ul className="flex flex-wrap gap-2 text-sm text-zinc-800 dark:text-zinc-200">
-            {aliases.map((a) => (
-              <li
-                key={a.id ?? a.name}
-                className="rounded-md border border-zinc-200 bg-white px-2 py-1 dark:border-zinc-700 dark:bg-zinc-950"
-              >
-                {a.name ?? "—"}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      {namevariations.length > 0 ? (
-        <section>
-          <h3 className="mb-2 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-            Name variations
-          </h3>
-          <ul className="flex flex-wrap gap-2 text-sm text-zinc-700 dark:text-zinc-300">
-            {namevariations.map((n) => (
-              <li
-                key={n}
-                className="rounded-md border border-zinc-200 px-2 py-1 dark:border-zinc-700"
-              >
-                {n}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
+      </details>
 
       <DiscogsReleasesSection
         libraryArtistName={libraryArtistName}
@@ -344,9 +355,14 @@ function DiscogsReleasesSection({
 }) {
   const parsed = releasesRow ? parseStoredReleasesJson(releasesRow.dataJson) : null;
   const list = parsed?.releases ?? [];
+  const filtered = list.filter((item) => {
+    const typeOk = item.type.trim().toLowerCase() === "release";
+    const roleOk = (item.role ?? "").trim().toLowerCase() === "main";
+    return typeOk && roleOk;
+  });
 
   const db = getDb();
-  const keys = list.map((item) => {
+  const keys = filtered.map((item) => {
     const type = item.type.toLowerCase() === "master" ? "master" : "release";
     return `${type}:${item.id}`;
   });
@@ -375,7 +391,7 @@ function DiscogsReleasesSection({
           </h3>
           {releasesRow ? (
             <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
-              {list.length} loaded
+              {filtered.length} shown · {list.length} loaded
               {parsed && parsed.items > list.length
                 ? ` · Discogs reports ${parsed.items} total`
                 : parsed && parsed.items > 0
@@ -412,7 +428,13 @@ function DiscogsReleasesSection({
         </p>
       ) : null}
 
-      {list.length > 0 ? (
+      {list.length > 0 && filtered.length === 0 ? (
+        <p className="text-sm text-zinc-600 dark:text-zinc-400">
+          No items match the default filter (type = release, role = main).
+        </p>
+      ) : null}
+
+      {filtered.length > 0 ? (
         <div className="max-h-[min(50vh,28rem)] overflow-auto rounded-md border border-zinc-200 dark:border-zinc-800">
           <table className="w-full min-w-[56rem] border-collapse text-left text-xs">
             <thead className="sticky top-0 z-10 border-b border-zinc-200 bg-zinc-100 dark:border-zinc-800 dark:bg-zinc-900">
@@ -428,7 +450,7 @@ function DiscogsReleasesSection({
               </tr>
             </thead>
             <tbody>
-              {list.map((item, index) => (
+              {filtered.map((item, index) => (
                 <tr
                   key={`${item.type}-${item.id}-${index}`}
                   className="border-b border-zinc-100 odd:bg-white even:bg-zinc-50/80 dark:border-zinc-800/80 dark:odd:bg-zinc-950 dark:even:bg-zinc-900/50"
