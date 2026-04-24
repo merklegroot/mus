@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 
 const PAGE_TITLE: Record<string, string> = {
   "/": "Home",
+  "/playlists": "Playlists",
   "/tube": "Tube",
   "/data": "Data",
 };
@@ -37,6 +38,12 @@ export function TopNav() {
           className="text-sm font-medium text-zinc-950 underline-offset-4 hover:underline dark:text-zinc-50"
         >
           Home
+        </Link>
+        <Link
+          href="/playlists"
+          className="text-sm font-medium text-zinc-950 underline-offset-4 hover:underline dark:text-zinc-50"
+        >
+          Playlists
         </Link>
         <Link
           href="/tube"
