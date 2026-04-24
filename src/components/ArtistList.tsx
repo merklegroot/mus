@@ -87,10 +87,10 @@ export function ArtistList({
   return (
     <section className={panelClass} aria-label="Artists in library">
       <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+        <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
           Artists
           {selectedArtist ? (
-            <span className="ml-1.5 font-normal text-zinc-500 dark:text-zinc-400">
+            <span className="ml-1.5 text-sm font-normal text-zinc-500 dark:text-zinc-400">
               · {selectedArtist}
             </span>
           ) : null}

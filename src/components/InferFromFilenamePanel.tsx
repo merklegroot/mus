@@ -381,14 +381,8 @@ export function InferFromFilenamePanel({
   return (
     <section
       className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700"
-      aria-label="Edit track from filename"
+      aria-label="Edit track"
     >
-      <h3 className="mb-2 text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-        Guess from filename
-      </h3>
-      <p className="mb-3 text-xs text-zinc-500 dark:text-zinc-400">
-        Heuristics on the file name only. Nothing is saved to the database.
-      </p>
       <button
         type="button"
         onClick={runInfer}
@@ -412,7 +406,9 @@ export function InferFromFilenamePanel({
         >
           <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
             <div className="min-w-0">
-              <h3 className="text-sm font-semibold">Filename inference</h3>
+              <h3 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                Filename inference
+              </h3>
               <p className="mt-1 break-all text-xs text-zinc-600 dark:text-zinc-400">
                 {filename}
               </p>
@@ -430,7 +426,7 @@ export function InferFromFilenamePanel({
           <div className="min-h-0 flex-1 overflow-auto">
           <div className="grid gap-4 px-5 py-4 md:grid-cols-2">
             <section className="space-y-2">
-              <h4 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              <h4 className="text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                 ID3 / file details
               </h4>
               {details.status === "loading" ? (
@@ -484,7 +480,7 @@ export function InferFromFilenamePanel({
             </section>
 
             <section className="space-y-2">
-              <h4 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              <h4 className="text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
                 Inferred from filename
               </h4>
               {state.status === "loading" ? (
@@ -553,7 +549,7 @@ export function InferFromFilenamePanel({
           </div>
 
           <div className="border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
-          <h4 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
             Edit ID3 tags
           </h4>
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
@@ -663,7 +659,7 @@ export function InferFromFilenamePanel({
         </div>
 
           <div className="border-t border-zinc-200 px-5 py-4 dark:border-zinc-800">
-          <h4 className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+          <h4 className="text-sm font-semibold uppercase tracking-wide text-zinc-600 dark:text-zinc-400">
             Rename file
           </h4>
           <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">

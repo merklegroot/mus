@@ -352,15 +352,15 @@ export function Mp3List() {
         aria-busy={state.status === "loading"}
       >
         <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
             Songs
             {filterArtist ? (
-              <span className="ml-1.5 font-normal text-zinc-500 dark:text-zinc-400">
+              <span className="ml-1.5 text-sm font-normal text-zinc-500 dark:text-zinc-400">
                 · {filterArtist}
               </span>
             ) : null}
             {filterAlbum ? (
-              <span className="ml-1.5 font-normal text-zinc-500 dark:text-zinc-400">
+              <span className="ml-1.5 text-sm font-normal text-zinc-500 dark:text-zinc-400">
                 · {filterAlbum}
               </span>
             ) : null}
@@ -433,7 +433,7 @@ export function Mp3List() {
         aria-label="Track details"
       >
         <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <h2 className="text-sm font-medium text-zinc-800 dark:text-zinc-200">
+          <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
             Details
           </h2>
           {selected ? (
@@ -491,7 +491,7 @@ export function Mp3List() {
                 className="mt-4 rounded-lg border border-red-200 bg-red-50/60 p-3 dark:border-red-900/55 dark:bg-red-950/25"
                 aria-label="Delete file"
               >
-                <h3 className="text-xs font-medium uppercase tracking-wide text-red-800 dark:text-red-300">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-red-800 dark:text-red-300">
                   Delete file
                 </h3>
                 <p className="mt-1 text-xs text-red-900/85 dark:text-red-200/85">
