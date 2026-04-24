@@ -490,26 +490,29 @@ export function PlaylistManager() {
                     {selected.tracks.map((track, index) => (
                       <li
                         key={track.id}
-                        className="flex items-center gap-3 rounded-md border border-zinc-200 bg-white px-3 py-2 text-sm dark:border-zinc-800 dark:bg-zinc-950"
+                        className={`flex items-center gap-3 rounded-md border border-zinc-200 bg-white text-sm dark:border-zinc-800 dark:bg-zinc-950 ${
+                          playingFilename === track.filename
+                            ? "ring-2 ring-zinc-300 dark:ring-zinc-700"
+                            : ""
+                        }`}
                       >
-                        <span className="w-6 shrink-0 text-right text-zinc-500">
-                          {index + 1}.
-                        </span>
-                        <span className="min-w-0 flex-1 break-all text-zinc-900 dark:text-zinc-100">
-                          {track.filename}
-                        </span>
                         <button
                           type="button"
                           onClick={() => setPlayingFilename(track.filename)}
-                          className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                          className="flex min-w-0 flex-1 items-center gap-3 rounded-l-md px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
                         >
-                          {playingFilename === track.filename ? "Playing" : "Play"}
+                          <span className="w-6 shrink-0 text-right text-zinc-500">
+                            {index + 1}.
+                          </span>
+                          <span className="min-w-0 flex-1 break-all text-zinc-900 dark:text-zinc-100">
+                            {track.filename}
+                          </span>
                         </button>
                         <button
                           type="button"
                           onClick={() => void removeSong(track.filename)}
                           disabled={busy}
-                          className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                          className="mr-3 shrink-0 rounded-md px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
                         >
                           Remove
                         </button>
@@ -540,7 +543,6 @@ export function PlaylistManager() {
           <audio
             key={playingFilename}
             controls
-            autoPlay
             preload="metadata"
             className="h-10 w-full accent-zinc-900 sm:max-w-xl dark:accent-zinc-100"
             src={`/api/mp3s/${encodeURIComponent(playingFilename)}/stream`}
