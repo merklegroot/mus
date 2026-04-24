@@ -2,7 +2,7 @@ import { inArray } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
 import { tracks } from "@/db/schema";
-import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
+import { mergedArtistForFilename } from "@/lib/mergedArtistForFilename";
 import { listMusicLibraryMp3Names } from "@/lib/musicLibraryIndex";
 
 export const dynamic = "force-dynamic";
@@ -14,19 +14,6 @@ type SongListEntry = {
   /** Cached ID3 album from DB (no filename inference). */
   album: string | null;
 };
-
-function mergedArtistForFilename(
-  filename: string,
-  id3Artist: string | null | undefined,
-): string | null {
-  const id3 =
-    typeof id3Artist === "string" && id3Artist.trim() !== ""
-      ? id3Artist.trim()
-      : null;
-  const inferred =
-    inferArtistTitleFromFilename(filename).primary.artist?.trim() || null;
-  return id3 ?? inferred;
-}
 
 function id3AlbumOnly(album: string | null | undefined): string | null {
   if (typeof album !== "string" || album.trim() === "") return null;

@@ -67,10 +67,17 @@ function parseSongsResponse(data: unknown):
   return { ok: false, message: "Invalid response" };
 }
 
-/** Match /api/artists semantics: ID3 artist or filename inference counts. */
+/**
+ * Match /api/artists semantics: ID3 artist or filename inference counts;
+ * synthetic "Unknown" when the merged artist from the API is empty.
+ */
 function songMatchesArtistFilter(s: SongRow, filterArtist: string): boolean {
   const want = filterArtist.trim();
   if (want === "") return false;
+
+  if (want === "Unknown") {
+    return (s.artist?.trim() ?? "") === "";
+  }
 
   const merged = s.artist?.trim() ?? "";
   if (merged === want) return true;
