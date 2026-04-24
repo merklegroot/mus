@@ -9,7 +9,7 @@ import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename
 
 type SongRow = { filename: string; artist: string | null; album: string | null };
 
-type Mp3ListState =
+type MusicLibraryControlState =
   | { status: "loading" }
   | { status: "error"; message: string }
   | { status: "empty" }
@@ -154,8 +154,10 @@ function isMp3Details(data: unknown): data is Mp3Details {
   );
 }
 
-export function Mp3List() {
-  const [state, setState] = useState<Mp3ListState>({ status: "loading" });
+export function MusicLibraryControl() {
+  const [state, setState] = useState<MusicLibraryControlState>({
+    status: "loading",
+  });
   const [filterArtist, setFilterArtist] = useState<string | null>(null);
   const [filterAlbum, setFilterAlbum] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
