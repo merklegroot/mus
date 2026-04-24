@@ -441,7 +441,7 @@ export function Mp3List() {
       >
         <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
           <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Details
+            Song Details
           </h2>
           {selected ? (
             <button
