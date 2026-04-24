@@ -76,6 +76,7 @@ export function PlaylistManager() {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [playingFilename, setPlayingFilename] = useState<string | null>(null);
 
   async function loadPlaylists(nextSelectedId?: number | null) {
     const res = await fetch("/api/playlists");
@@ -193,6 +194,11 @@ export function PlaylistManager() {
     () => songs.filter((song) => !selectedFilenames.has(song.filename)),
     [songs, selectedFilenames],
   );
+
+  useEffect(() => {
+    if (!playingFilename || selectedFilenames.has(playingFilename)) return;
+    setPlayingFilename(null);
+  }, [playingFilename, selectedFilenames]);
 
   async function runAction(action: () => Promise<void>) {
     setBusy(true);
@@ -312,6 +318,9 @@ export function PlaylistManager() {
         throw new Error("Invalid playlist response");
       }
       setSelected(playlist);
+      if (playingFilename === filename) {
+        setPlayingFilename(null);
+      }
       await loadPlaylists(playlist.id);
     });
   }
@@ -469,6 +478,23 @@ export function PlaylistManager() {
                 <h2 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
                   Songs
                 </h2>
+                {playingFilename ? (
+                  <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
+                    <p className="mb-2 break-all text-sm font-medium text-zinc-900 dark:text-zinc-100">
+                      Now playing: {playingFilename}
+                    </p>
+                    <audio
+                      key={playingFilename}
+                      controls
+                      autoPlay
+                      preload="metadata"
+                      className="block h-10 w-full accent-zinc-900 dark:accent-zinc-100"
+                      src={`/api/mp3s/${encodeURIComponent(playingFilename)}/stream`}
+                    >
+                      Your browser does not support the audio element.
+                    </audio>
+                  </div>
+                ) : null}
                 {selected.tracks.length === 0 ? (
                   <p className="mt-2 text-sm text-zinc-500">
                     This playlist is empty.
@@ -486,6 +512,13 @@ export function PlaylistManager() {
                         <span className="min-w-0 flex-1 break-all text-zinc-900 dark:text-zinc-100">
                           {track.filename}
                         </span>
+                        <button
+                          type="button"
+                          onClick={() => setPlayingFilename(track.filename)}
+                          className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                        >
+                          {playingFilename === track.filename ? "Playing" : "Play"}
+                        </button>
                         <button
                           type="button"
                           onClick={() => void removeSong(track.filename)}
