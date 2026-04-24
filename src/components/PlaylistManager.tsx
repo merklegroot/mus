@@ -78,6 +78,7 @@ export function PlaylistManager() {
   const [error, setError] = useState<string | null>(null);
   const [playingFilename, setPlayingFilename] = useState<string | null>(null);
   const [queuedFilename, setQueuedFilename] = useState<string | null>(null);
+  const [candidateFilename, setCandidateFilename] = useState<string | null>(null);
   const [isPlayerPlaying, setIsPlayerPlaying] = useState(false);
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
 
@@ -200,28 +201,33 @@ export function PlaylistManager() {
 
   function chooseSong(filename: string) {
     if (filename === playingFilename) return;
-    if (filename === queuedFilename) {
-      playNow(filename);
-      return;
-    }
     if (playingFilename && isPlayerPlaying) {
-      setQueuedFilename(filename);
+      setCandidateFilename(filename);
       return;
     }
     setPlayingFilename(filename);
     setQueuedFilename(null);
+    setCandidateFilename(null);
     setShouldAutoPlay(false);
   }
 
   function playNow(filename: string) {
     setPlayingFilename(filename);
     setQueuedFilename(null);
+    setCandidateFilename(null);
     setShouldAutoPlay(true);
+  }
+
+  function queueNext(filename: string) {
+    if (filename === playingFilename) return;
+    setQueuedFilename(filename);
+    setCandidateFilename(null);
   }
 
   function closePlayer() {
     setPlayingFilename(null);
     setQueuedFilename(null);
+    setCandidateFilename(null);
     setIsPlayerPlaying(false);
     setShouldAutoPlay(false);
   }
@@ -354,6 +360,9 @@ export function PlaylistManager() {
       setSelected(playlist);
       if (queuedFilename === filename) {
         setQueuedFilename(null);
+      }
+      if (candidateFilename === filename) {
+        setCandidateFilename(null);
       }
       await loadPlaylists(playlist.id);
     });
@@ -529,15 +538,14 @@ export function PlaylistManager() {
                             ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/30 dark:ring-emerald-900"
                             : queuedFilename === track.filename
                               ? "border-amber-300 bg-amber-50 ring-2 ring-amber-200 dark:border-amber-800 dark:bg-amber-950/30 dark:ring-amber-900"
-                              : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                              : candidateFilename === track.filename
+                                ? "border-sky-300 bg-sky-50 ring-2 ring-sky-200 dark:border-sky-800 dark:bg-sky-950/30 dark:ring-sky-900"
+                                : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
                         }`}
                       >
                         <button
                           type="button"
-                          onClick={() => {
-                            if (queuedFilename === track.filename) return;
-                            chooseSong(track.filename);
-                          }}
+                          onClick={() => chooseSong(track.filename)}
                           className="flex min-w-0 flex-1 items-center gap-3 rounded-l-md px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
                         >
                           <span className="w-6 shrink-0 text-right text-zinc-500">
@@ -551,6 +559,10 @@ export function PlaylistManager() {
                               <span className="mt-0.5 block text-xs text-amber-700 dark:text-amber-300">
                                 Queued, not playing yet
                               </span>
+                            ) : candidateFilename === track.filename ? (
+                              <span className="mt-0.5 block text-xs text-sky-700 dark:text-sky-300">
+                                Choose whether to queue it or play it now
+                              </span>
                             ) : null}
                           </span>
                           {playingFilename === track.filename ? (
@@ -561,8 +573,30 @@ export function PlaylistManager() {
                             <span className="shrink-0 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white dark:bg-amber-400 dark:text-amber-950">
                               Queued next
                             </span>
+                          ) : candidateFilename === track.filename ? (
+                            <span className="shrink-0 rounded-full bg-sky-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-sky-400 dark:text-sky-950">
+                              Selected
+                            </span>
                           ) : null}
                         </button>
+                        {candidateFilename === track.filename ? (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => queueNext(track.filename)}
+                              className="shrink-0 rounded-md border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:bg-zinc-950 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                            >
+                              Queue next
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => playNow(track.filename)}
+                              className="shrink-0 rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                            >
+                              Play now
+                            </button>
+                          </>
+                        ) : null}
                         {queuedFilename === track.filename ? (
                           <button
                             type="button"
