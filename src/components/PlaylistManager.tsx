@@ -77,8 +77,11 @@ export function PlaylistManager() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playingFilename, setPlayingFilename] = useState<string | null>(null);
-  const [queuedFilename, setQueuedFilename] = useState<string | null>(null);
-  const [candidateFilename, setCandidateFilename] = useState<string | null>(null);
+  const [queueFilenames, setQueueFilenames] = useState<string[]>([]);
+  const [selectedSongFilename, setSelectedSongFilename] = useState<string | null>(
+    null,
+  );
+  const [isPlayerVisible, setIsPlayerVisible] = useState(false);
   const [isPlayerPlaying, setIsPlayerPlaying] = useState(false);
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
 
@@ -199,45 +202,41 @@ export function PlaylistManager() {
     [songs, selectedFilenames],
   );
 
-  function chooseSong(filename: string) {
-    if (filename === playingFilename) return;
-    if (playingFilename && isPlayerPlaying) {
-      setCandidateFilename(filename);
-      return;
-    }
-    setPlayingFilename(filename);
-    setQueuedFilename(null);
-    setCandidateFilename(null);
-    setShouldAutoPlay(false);
+  function selectSong(filename: string) {
+    setSelectedSongFilename(filename);
   }
 
   function playNow(filename: string) {
     setPlayingFilename(filename);
-    setQueuedFilename(null);
-    setCandidateFilename(null);
+    setIsPlayerVisible(true);
     setShouldAutoPlay(true);
   }
 
-  function queueNext(filename: string) {
-    if (filename === playingFilename) return;
-    setQueuedFilename(filename);
-    setCandidateFilename(null);
+  function addToQueue(filename: string) {
+    setQueueFilenames((prev) => [...prev, filename]);
   }
 
   function closePlayer() {
-    setPlayingFilename(null);
-    setQueuedFilename(null);
-    setCandidateFilename(null);
+    setIsPlayerVisible(false);
     setIsPlayerPlaying(false);
     setShouldAutoPlay(false);
   }
 
   function handleTrackEnded() {
     setIsPlayerPlaying(false);
-    if (!queuedFilename) return;
-    setPlayingFilename(queuedFilename);
-    setQueuedFilename(null);
+    const [nextFilename, ...remaining] = queueFilenames;
+    if (!nextFilename) return;
+    setQueueFilenames(remaining);
+    setPlayingFilename(nextFilename);
+    setIsPlayerVisible(true);
     setShouldAutoPlay(true);
+  }
+
+  function playQueuedNow(index: number) {
+    const filename = queueFilenames[index];
+    if (!filename) return;
+    setQueueFilenames((prev) => prev.filter((_, i) => i !== index));
+    playNow(filename);
   }
 
   async function runAction(action: () => Promise<void>) {
@@ -358,11 +357,8 @@ export function PlaylistManager() {
         throw new Error("Invalid playlist response");
       }
       setSelected(playlist);
-      if (queuedFilename === filename) {
-        setQueuedFilename(null);
-      }
-      if (candidateFilename === filename) {
-        setCandidateFilename(null);
+      if (selectedSongFilename === filename) {
+        setSelectedSongFilename(null);
       }
       await loadPlaylists(playlist.id);
     });
@@ -374,7 +370,7 @@ export function PlaylistManager() {
   return (
     <>
     <main
-      className={`flex flex-1 flex-col items-center gap-6 px-4 py-10 lg:items-stretch lg:px-8 ${playingFilename ? "pb-36" : ""}`}
+      className={`flex flex-1 flex-col items-center gap-6 px-4 py-10 lg:items-stretch lg:px-8 ${playingFilename && isPlayerVisible ? "pb-36" : ""}`}
     >
       <section className={`${panelClass} mx-auto w-full max-w-5xl`}>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
@@ -530,92 +526,96 @@ export function PlaylistManager() {
                   </p>
                 ) : (
                   <ol className="mt-3 space-y-2">
-                    {selected.tracks.map((track, index) => (
-                      <li
-                        key={track.id}
-                        className={`flex items-center gap-3 rounded-md border text-sm ${
-                          playingFilename === track.filename
-                            ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/30 dark:ring-emerald-900"
-                            : queuedFilename === track.filename
-                              ? "border-amber-300 bg-amber-50 ring-2 ring-amber-200 dark:border-amber-800 dark:bg-amber-950/30 dark:ring-amber-900"
-                              : candidateFilename === track.filename
+                    {selected.tracks.map((track, index) => {
+                      const isCurrent = playingFilename === track.filename;
+                      const isSelectedSong =
+                        selectedSongFilename === track.filename;
+                      const queueCount = queueFilenames.filter(
+                        (filename) => filename === track.filename,
+                      ).length;
+
+                      return (
+                        <li
+                          key={track.id}
+                          className={`flex items-center gap-3 rounded-md border text-sm ${
+                            isCurrent
+                              ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/30 dark:ring-emerald-900"
+                              : isSelectedSong
                                 ? "border-sky-300 bg-sky-50 ring-2 ring-sky-200 dark:border-sky-800 dark:bg-sky-950/30 dark:ring-sky-900"
                                 : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-                        }`}
-                      >
-                        <button
-                          type="button"
-                          onClick={() => chooseSong(track.filename)}
-                          className="flex min-w-0 flex-1 items-center gap-3 rounded-l-md px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                          }`}
                         >
-                          <span className="w-6 shrink-0 text-right text-zinc-500">
-                            {index + 1}.
-                          </span>
-                          <span className="min-w-0 flex-1">
-                            <span className="block break-all text-zinc-900 dark:text-zinc-100">
-                              {track.filename}
-                            </span>
-                            {queuedFilename === track.filename ? (
-                              <span className="mt-0.5 block text-xs text-amber-700 dark:text-amber-300">
-                                Queued, not playing yet
-                              </span>
-                            ) : candidateFilename === track.filename ? (
-                              <span className="mt-0.5 block text-xs text-sky-700 dark:text-sky-300">
-                                Choose whether to queue it or play it now
-                              </span>
-                            ) : null}
-                          </span>
-                          {playingFilename === track.filename ? (
-                            <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-emerald-500 dark:text-emerald-950">
-                              {isPlayerPlaying ? "Now playing" : "In player"}
-                            </span>
-                          ) : queuedFilename === track.filename ? (
-                            <span className="shrink-0 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white dark:bg-amber-400 dark:text-amber-950">
-                              Queued next
-                            </span>
-                          ) : candidateFilename === track.filename ? (
-                            <span className="shrink-0 rounded-full bg-sky-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-sky-400 dark:text-sky-950">
-                              Selected
-                            </span>
-                          ) : null}
-                        </button>
-                        {candidateFilename === track.filename ? (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => queueNext(track.filename)}
-                              className="shrink-0 rounded-md border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:bg-zinc-950 dark:text-sky-300 dark:hover:bg-sky-950/40"
-                            >
-                              Queue next
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => playNow(track.filename)}
-                              className="shrink-0 rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
-                            >
-                              Play now
-                            </button>
-                          </>
-                        ) : null}
-                        {queuedFilename === track.filename ? (
                           <button
                             type="button"
-                            onClick={() => playNow(track.filename)}
-                            className="shrink-0 rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                            onClick={() => selectSong(track.filename)}
+                            className="flex min-w-0 flex-1 items-center gap-3 rounded-l-md px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
                           >
-                            Play now
+                            <span className="w-6 shrink-0 text-right text-zinc-500">
+                              {index + 1}.
+                            </span>
+                            <span className="min-w-0 flex-1">
+                              <span className="block break-all text-zinc-900 dark:text-zinc-100">
+                                {track.filename}
+                              </span>
+                              {isSelectedSong ? (
+                                <span className="mt-0.5 block text-xs text-sky-700 dark:text-sky-300">
+                                  Selected. Choose an action.
+                                </span>
+                              ) : queueCount > 0 ? (
+                                <span className="mt-0.5 block text-xs text-amber-700 dark:text-amber-300">
+                                  In queue {queueCount} time
+                                  {queueCount === 1 ? "" : "s"}
+                                </span>
+                              ) : null}
+                            </span>
+                            {isCurrent ? (
+                              <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-emerald-500 dark:text-emerald-950">
+                                {isPlayerPlaying ? "Now playing" : "In player"}
+                              </span>
+                            ) : queueCount > 0 ? (
+                              <span className="shrink-0 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white dark:bg-amber-400 dark:text-amber-950">
+                                Queue x{queueCount}
+                              </span>
+                            ) : null}
                           </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={() => void removeSong(track.filename)}
-                          disabled={busy}
-                          className="mr-3 shrink-0 rounded-md px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
-                        >
-                          Remove
-                        </button>
-                      </li>
-                    ))}
+                          {isSelectedSong ? (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => addToQueue(track.filename)}
+                                className="shrink-0 rounded-md border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:bg-zinc-950 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                              >
+                                Add to queue
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => playNow(track.filename)}
+                                className="shrink-0 rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                              >
+                                Play now
+                              </button>
+                            </>
+                          ) : null}
+                          {isCurrent && !isPlayerVisible ? (
+                            <button
+                              type="button"
+                              onClick={() => setIsPlayerVisible(true)}
+                              className="shrink-0 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                            >
+                              Show player
+                            </button>
+                          ) : null}
+                          <button
+                            type="button"
+                            onClick={() => void removeSong(track.filename)}
+                            disabled={busy}
+                            className="mr-3 shrink-0 rounded-md px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                          >
+                            Remove
+                          </button>
+                        </li>
+                      );
+                    })}
                   </ol>
                 )}
               </div>
@@ -624,33 +624,56 @@ export function PlaylistManager() {
         </section>
       </div>
     </main>
-    {playingFilename ? (
+    {playingFilename && isPlayerVisible ? (
       <aside
         className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
         aria-label="Music player"
       >
         <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="min-w-0 flex-1">
+          <div className="min-w-0 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 sm:w-80 dark:border-zinc-800 dark:bg-zinc-900/60">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-              {isPlayerPlaying ? "Now playing" : "In player"}
+              Playback queue ({queueFilenames.length + 1})
             </p>
-            <p className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-              {playingFilename}
-            </p>
-            {queuedFilename ? (
-              <div className="mt-1 flex min-w-0 flex-wrap items-center gap-2">
-                <p className="min-w-0 truncate text-xs text-amber-700 dark:text-amber-300">
-                  Queued next, not playing yet: {queuedFilename}
+            <ol className="mt-1 max-h-28 space-y-1 overflow-y-auto text-xs">
+              <li className="flex min-w-0 items-center gap-2 rounded-md bg-emerald-50 px-2 py-1 dark:bg-emerald-950/30">
+                <span className="shrink-0 text-emerald-700 dark:text-emerald-300">
+                  1.
+                </span>
+                <span className="min-w-0 flex-1 truncate font-semibold text-zinc-950 dark:text-zinc-50">
+                  {playingFilename}
+                </span>
+                <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-semibold text-white dark:bg-emerald-500 dark:text-emerald-950">
+                  {isPlayerPlaying ? "Now playing" : "In player"}
+                </span>
+              </li>
+              {queueFilenames.slice(0, 4).map((filename, index) => (
+                  <li
+                    key={`${filename}:${index}`}
+                    className="flex min-w-0 items-center gap-2"
+                  >
+                    <span className="shrink-0 text-amber-700 dark:text-amber-300">
+                      {index + 2}.
+                    </span>
+                    <span className="min-w-0 flex-1 truncate font-medium text-zinc-950 dark:text-zinc-50">
+                      {filename}
+                    </span>
+                    {index === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => playQueuedNow(index)}
+                        className="shrink-0 rounded-md bg-zinc-950 px-2 py-0.5 text-[11px] font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                      >
+                        Play now
+                      </button>
+                    ) : null}
+                  </li>
+              ))}
+            </ol>
+              {queueFilenames.length > 4 ? (
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                  +{queueFilenames.length - 4} more
                 </p>
-                <button
-                  type="button"
-                  onClick={() => playNow(queuedFilename)}
-                  className="shrink-0 rounded-md bg-zinc-950 px-2.5 py-1 text-xs font-semibold text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
-                >
-                  Play now
-                </button>
-              </div>
-            ) : null}
+              ) : null}
           </div>
           <audio
             key={playingFilename}
