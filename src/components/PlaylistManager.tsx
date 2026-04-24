@@ -329,7 +329,10 @@ export function PlaylistManager() {
     "rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40";
 
   return (
-    <main className="flex flex-1 flex-col items-center gap-6 px-4 py-10 lg:items-stretch lg:px-8">
+    <>
+    <main
+      className={`flex flex-1 flex-col items-center gap-6 px-4 py-10 lg:items-stretch lg:px-8 ${playingFilename ? "pb-36" : ""}`}
+    >
       <section className={`${panelClass} mx-auto w-full max-w-5xl`}>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
           Playlists
@@ -478,23 +481,6 @@ export function PlaylistManager() {
                 <h2 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
                   Songs
                 </h2>
-                {playingFilename ? (
-                  <div className="mt-3 rounded-md border border-zinc-200 bg-white p-3 dark:border-zinc-800 dark:bg-zinc-950">
-                    <p className="mb-2 break-all text-sm font-medium text-zinc-900 dark:text-zinc-100">
-                      Now playing: {playingFilename}
-                    </p>
-                    <audio
-                      key={playingFilename}
-                      controls
-                      autoPlay
-                      preload="metadata"
-                      className="block h-10 w-full accent-zinc-900 dark:accent-zinc-100"
-                      src={`/api/mp3s/${encodeURIComponent(playingFilename)}/stream`}
-                    >
-                      Your browser does not support the audio element.
-                    </audio>
-                  </div>
-                ) : null}
                 {selected.tracks.length === 0 ? (
                   <p className="mt-2 text-sm text-zinc-500">
                     This playlist is empty.
@@ -537,5 +523,41 @@ export function PlaylistManager() {
         </section>
       </div>
     </main>
+    {playingFilename ? (
+      <aside
+        className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
+        aria-label="Music player"
+      >
+        <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="min-w-0 flex-1">
+            <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+              Now playing
+            </p>
+            <p className="truncate text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+              {playingFilename}
+            </p>
+          </div>
+          <audio
+            key={playingFilename}
+            controls
+            autoPlay
+            preload="metadata"
+            className="h-10 w-full accent-zinc-900 sm:max-w-xl dark:accent-zinc-100"
+            src={`/api/mp3s/${encodeURIComponent(playingFilename)}/stream`}
+          >
+            Your browser does not support the audio element.
+          </audio>
+          <button
+            type="button"
+            onClick={() => setPlayingFilename(null)}
+            className="self-end rounded-md px-3 py-2 text-sm font-medium text-zinc-600 hover:bg-zinc-100 hover:text-zinc-950 sm:self-auto dark:text-zinc-300 dark:hover:bg-zinc-900 dark:hover:text-zinc-50"
+            aria-label="Close player"
+          >
+            Close
+          </button>
+        </div>
+      </aside>
+    ) : null}
+    </>
   );
 }
