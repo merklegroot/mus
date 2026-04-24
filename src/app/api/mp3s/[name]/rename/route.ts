@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import { tracks } from "@/db/schema";
 import { resolveMusicMp3 } from "@/lib/resolveMusicMp3";
 import { touchLibraryIndexStamp } from "@/lib/musicLibraryIndex";
+import { updatePlaylistTrackFilename } from "@/lib/playlists";
 
 export const dynamic = "force-dynamic";
 
@@ -115,6 +116,12 @@ export async function POST(
       .run();
   } catch {
     /* cache is optional */
+  }
+
+  try {
+    updatePlaylistTrackFilename(resolved.segment, newFilename);
+  } catch {
+    /* playlists are optional */
   }
 
   // Nudge list caching so it refreshes quickly.

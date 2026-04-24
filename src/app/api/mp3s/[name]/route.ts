@@ -7,6 +7,7 @@ import { getDb } from "@/db/client";
 import { tracks } from "@/db/schema";
 import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
 import { touchLibraryIndexStamp } from "@/lib/musicLibraryIndex";
+import { deletePlaylistTracksForFilename } from "@/lib/playlists";
 import { resolveMusicMp3 } from "@/lib/resolveMusicMp3";
 
 export const dynamic = "force-dynamic";
@@ -431,6 +432,12 @@ export async function DELETE(
     db.delete(tracks).where(eq(tracks.filename, segment)).run();
   } catch {
     /* cache is optional */
+  }
+
+  try {
+    deletePlaylistTracksForFilename(segment);
+  } catch {
+    /* playlists are optional */
   }
 
   touchLibraryIndexStamp();

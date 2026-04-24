@@ -1,8 +1,10 @@
 import {
+  index,
   integer,
   real,
   sqliteTable,
   text,
+  uniqueIndex,
 } from "drizzle-orm/sqlite-core";
 
 /**
@@ -80,3 +82,38 @@ export type DiscogsReleaseTracklistRow =
   typeof discogsReleaseTracklists.$inferSelect;
 export type NewDiscogsReleaseTracklistRow =
   typeof discogsReleaseTracklists.$inferInsert;
+
+/** User-managed playlist containers. */
+export const playlists = sqliteTable("playlists", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  name: text("name").notNull(),
+  createdAt: integer("created_at", { mode: "number" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "number" }).notNull(),
+});
+
+export type Playlist = typeof playlists.$inferSelect;
+export type NewPlaylist = typeof playlists.$inferInsert;
+
+/** Ordered MP3 filenames assigned to playlists. */
+export const playlistTracks = sqliteTable(
+  "playlist_tracks",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    playlistId: integer("playlist_id")
+      .notNull()
+      .references(() => playlists.id, { onDelete: "cascade" }),
+    filename: text("filename").notNull(),
+    position: integer("position").notNull(),
+    addedAt: integer("added_at", { mode: "number" }).notNull(),
+  },
+  (table) => [
+    index("playlist_tracks_playlist_id_idx").on(table.playlistId),
+    uniqueIndex("playlist_tracks_playlist_filename_uq").on(
+      table.playlistId,
+      table.filename,
+    ),
+  ],
+);
+
+export type PlaylistTrack = typeof playlistTracks.$inferSelect;
+export type NewPlaylistTrack = typeof playlistTracks.$inferInsert;

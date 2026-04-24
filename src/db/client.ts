@@ -18,9 +18,14 @@ function getSqlite(): InstanceType<typeof Database> {
     fs.mkdirSync(path.dirname(dbFile), { recursive: true });
     const sqlite = new Database(dbFile);
     sqlite.pragma("journal_mode = WAL");
+    sqlite.pragma("foreign_keys = ON");
     globalForSqlite.__mus_sqlite = sqlite;
   }
   return globalForSqlite.__mus_sqlite;
+}
+
+export function getSqliteDatabase() {
+  return getSqlite();
 }
 
 export function getDb() {
