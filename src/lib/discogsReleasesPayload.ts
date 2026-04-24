@@ -105,6 +105,11 @@ export function isPrimaryStudioAlbum(r: DiscogsReleaseListItem): boolean {
 
   const title = (r.title || "").toLowerCase().trim();
   const formatsText = discogsFormatsText(r);
+  // If Discogs didn't include any format descriptors for this master, we can't reliably
+  // distinguish albums from masters representing singles, radio items, etc.
+  // The releases fetch route enriches many masters with `formats[].descriptions`; without
+  // that enrichment we conservatively exclude.
+  if (formatsText.trim() === "") return false;
 
   // Exclude common non-studio categories. Keep broad but avoid matching ordinary words.
   const blacklist =

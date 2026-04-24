@@ -429,7 +429,7 @@ export function Mp3List() {
       </section>
 
       <aside
-        className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-y-auto lg:max-h-[min(90vh,56rem)] ${selected ? "" : "max-lg:hidden"}`}
+        className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-hidden lg:max-h-[min(90vh,56rem)] ${selected ? "" : "max-lg:hidden"}`}
         aria-label="Track details"
       >
         <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
@@ -455,204 +455,208 @@ export function Mp3List() {
           </p>
         ) : (
           <>
-            <audio
-              key={selected}
-              controls
-              preload="metadata"
-              className="mb-4 h-10 w-full accent-zinc-900 dark:accent-zinc-100"
-              src={`/api/mp3s/${encodeURIComponent(selected)}/stream`}
-            >
-              Your browser does not support the audio element.
-            </audio>
-            <InferFromFilenamePanel
-              key={`infer-${selected}`}
-              filename={selected}
-              onRenamed={async (newFilename) => {
-                setSelected(newFilename);
-                setDetail({ status: "loading" });
-                try {
-                  await refreshSongs();
-                } catch {
-                  /* keep previous list */
-                }
-              }}
-              onTagsSaved={async () => {
-                try {
-                  await refreshSongs();
-                } catch {
-                  /* keep previous list */
-                }
-              }}
-            />
-            <section
-              className="mt-4 rounded-lg border border-red-200 bg-red-50/60 p-3 dark:border-red-900/55 dark:bg-red-950/25"
-              aria-label="Delete file"
-            >
-              <h3 className="text-xs font-medium uppercase tracking-wide text-red-800 dark:text-red-300">
-                Delete file
-              </h3>
-              <p className="mt-1 text-xs text-red-900/85 dark:text-red-200/85">
-                Removes this MP3 from your music folder on disk. This cannot be undone.
-              </p>
-              {deleteConfirm ? (
-                <div className="mt-2 flex flex-col gap-2">
-                  <p className="break-all text-xs text-red-950 dark:text-red-100">
-                    Delete <span className="font-mono">{selected}</span>?
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={deleteBusy}
-                      onClick={() => {
-                        setDeleteConfirm(false);
-                        setDeleteError(null);
-                      }}
-                      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={deleteBusy}
-                      onClick={async () => {
-                        if (!selected) return;
-                        setDeleteBusy(true);
-                        setDeleteError(null);
-                        try {
-                          const res = await fetch(
-                            `/api/mp3s/${encodeURIComponent(selected)}`,
-                            { method: "DELETE" },
-                          );
-                          const data: unknown = await res.json().catch(() => ({}));
-                          if (!res.ok) {
-                            const message =
-                              typeof data === "object" &&
-                              data !== null &&
-                              "error" in data &&
-                              typeof (data as { error: unknown }).error === "string"
-                                ? (data as { error: string }).error
-                                : res.statusText;
-                            setDeleteError(message);
-                            return;
-                          }
-                          setSelected(null);
-                          setDetail(null);
-                          setDeleteConfirm(false);
-                          const listRes = await fetch("/api/mp3s");
-                          const listData: unknown = await listRes.json();
-                          if (!listRes.ok) return;
-                          const parsed = parseSongsResponse(listData);
-                          if (!parsed.ok) return;
-                          if (parsed.songs.length === 0) {
-                            setState({ status: "empty" });
-                          } else {
-                            setState({ status: "ready", songs: parsed.songs });
-                          }
-                        } catch (e) {
-                          setDeleteError(
-                            e instanceof Error ? e.message : String(e),
-                          );
-                        } finally {
-                          setDeleteBusy(false);
-                        }
-                      }}
-                      className="rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
-                    >
-                      {deleteBusy ? "Deleting…" : "Delete permanently"}
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeleteConfirm(true);
-                    setDeleteError(null);
-                  }}
-                  className="mt-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
-                >
-                  Delete file…
-                </button>
-              )}
-              {deleteError ? (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                  {deleteError}
+            <div className="mb-4 min-w-0 shrink-0 overflow-x-auto">
+              <audio
+                key={selected}
+                controls
+                preload="metadata"
+                className="block h-10 w-full max-w-full accent-zinc-900 dark:accent-zinc-100"
+                src={`/api/mp3s/${encodeURIComponent(selected)}/stream`}
+              >
+                Your browser does not support the audio element.
+              </audio>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto">
+              <InferFromFilenamePanel
+                key={`infer-${selected}`}
+                filename={selected}
+                onRenamed={async (newFilename) => {
+                  setSelected(newFilename);
+                  setDetail({ status: "loading" });
+                  try {
+                    await refreshSongs();
+                  } catch {
+                    /* keep previous list */
+                  }
+                }}
+                onTagsSaved={async () => {
+                  try {
+                    await refreshSongs();
+                  } catch {
+                    /* keep previous list */
+                  }
+                }}
+              />
+              <section
+                className="mt-4 rounded-lg border border-red-200 bg-red-50/60 p-3 dark:border-red-900/55 dark:bg-red-950/25"
+                aria-label="Delete file"
+              >
+                <h3 className="text-xs font-medium uppercase tracking-wide text-red-800 dark:text-red-300">
+                  Delete file
+                </h3>
+                <p className="mt-1 text-xs text-red-900/85 dark:text-red-200/85">
+                  Removes this MP3 from your music folder on disk. This cannot be undone.
                 </p>
-              ) : null}
-            </section>
-            {!detail || detail.status === "loading" ? (
-              <p className="text-sm text-zinc-500">Loading…</p>
-            ) : detail.status === "error" ? (
-              <p className="text-sm text-red-600 dark:text-red-400">
-                {detail.message}
-              </p>
-            ) : (
-              <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                <DetailRow label="File" value={detail.data.filename} />
-                <DetailRow
-                  label="Track #"
-                  value={
-                    detail.data.trackNumber != null
-                      ? String(detail.data.trackNumber)
-                      : null
-                  }
-                />
-                <DetailRow
-                  label="Title"
-                  value={detail.data.title}
-                  suffix={
-                    detail.data.titleSource === "filename" ? (
-                      <span className="text-zinc-500 dark:text-zinc-400">
-                        {" "}
-                        · inferred from filename
-                      </span>
-                    ) : null
-                  }
-                />
-                <DetailRow
-                  label="Artist"
-                  value={detail.data.artist}
-                  suffix={
-                    detail.data.artistSource === "filename" ? (
-                      <span className="text-zinc-500 dark:text-zinc-400">
-                        {" "}
-                        · inferred from filename
-                      </span>
-                    ) : null
-                  }
-                />
-                <DetailRow label="Album" value={detail.data.album} />
-                <DetailRow label="Genre" value={detail.data.genre} />
-                <DetailRow label="Comments" value={detail.data.comments} />
-                <DetailRow
-                  label="Year"
-                  value={
-                    detail.data.year != null ? String(detail.data.year) : null
-                  }
-                />
-                <DetailRow
-                  label="Duration"
-                  value={formatDuration(detail.data.durationSec)}
-                />
-                <DetailRow
-                  label="Bitrate"
-                  value={
-                    detail.data.bitrateKbps != null
-                      ? `${detail.data.bitrateKbps} kbps`
-                      : null
-                  }
-                />
-                <DetailRow label="Codec" value={detail.data.codec} />
-                <DetailRow
-                  label="Size"
-                  value={formatBytes(detail.data.sizeBytes)}
-                />
-                <DetailRow
-                  label="Modified"
-                  value={new Date(detail.data.modified).toLocaleString()}
-                />
-              </dl>
-            )}
+                {deleteConfirm ? (
+                  <div className="mt-2 flex flex-col gap-2">
+                    <p className="break-all text-xs text-red-950 dark:text-red-100">
+                      Delete <span className="font-mono">{selected}</span>?
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        disabled={deleteBusy}
+                        onClick={() => {
+                          setDeleteConfirm(false);
+                          setDeleteError(null);
+                        }}
+                        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        disabled={deleteBusy}
+                        onClick={async () => {
+                          if (!selected) return;
+                          setDeleteBusy(true);
+                          setDeleteError(null);
+                          try {
+                            const res = await fetch(
+                              `/api/mp3s/${encodeURIComponent(selected)}`,
+                              { method: "DELETE" },
+                            );
+                            const data: unknown = await res.json().catch(() => ({}));
+                            if (!res.ok) {
+                              const message =
+                                typeof data === "object" &&
+                                data !== null &&
+                                "error" in data &&
+                                typeof (data as { error: unknown }).error === "string"
+                                  ? (data as { error: string }).error
+                                  : res.statusText;
+                              setDeleteError(message);
+                              return;
+                            }
+                            setSelected(null);
+                            setDetail(null);
+                            setDeleteConfirm(false);
+                            const listRes = await fetch("/api/mp3s");
+                            const listData: unknown = await listRes.json();
+                            if (!listRes.ok) return;
+                            const parsed = parseSongsResponse(listData);
+                            if (!parsed.ok) return;
+                            if (parsed.songs.length === 0) {
+                              setState({ status: "empty" });
+                            } else {
+                              setState({ status: "ready", songs: parsed.songs });
+                            }
+                          } catch (e) {
+                            setDeleteError(
+                              e instanceof Error ? e.message : String(e),
+                            );
+                          } finally {
+                            setDeleteBusy(false);
+                          }
+                        }}
+                        className="rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
+                      >
+                        {deleteBusy ? "Deleting…" : "Delete permanently"}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDeleteConfirm(true);
+                      setDeleteError(null);
+                    }}
+                    className="mt-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
+                  >
+                    Delete file…
+                  </button>
+                )}
+                {deleteError ? (
+                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                    {deleteError}
+                  </p>
+                ) : null}
+              </section>
+              {!detail || detail.status === "loading" ? (
+                <p className="text-sm text-zinc-500">Loading…</p>
+              ) : detail.status === "error" ? (
+                <p className="text-sm text-red-600 dark:text-red-400">
+                  {detail.message}
+                </p>
+              ) : (
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
+                  <DetailRow label="File" value={detail.data.filename} />
+                  <DetailRow
+                    label="Track #"
+                    value={
+                      detail.data.trackNumber != null
+                        ? String(detail.data.trackNumber)
+                        : null
+                    }
+                  />
+                  <DetailRow
+                    label="Title"
+                    value={detail.data.title}
+                    suffix={
+                      detail.data.titleSource === "filename" ? (
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          {" "}
+                          · inferred from filename
+                        </span>
+                      ) : null
+                    }
+                  />
+                  <DetailRow
+                    label="Artist"
+                    value={detail.data.artist}
+                    suffix={
+                      detail.data.artistSource === "filename" ? (
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          {" "}
+                          · inferred from filename
+                        </span>
+                      ) : null
+                    }
+                  />
+                  <DetailRow label="Album" value={detail.data.album} />
+                  <DetailRow label="Genre" value={detail.data.genre} />
+                  <DetailRow label="Comments" value={detail.data.comments} />
+                  <DetailRow
+                    label="Year"
+                    value={
+                      detail.data.year != null ? String(detail.data.year) : null
+                    }
+                  />
+                  <DetailRow
+                    label="Duration"
+                    value={formatDuration(detail.data.durationSec)}
+                  />
+                  <DetailRow
+                    label="Bitrate"
+                    value={
+                      detail.data.bitrateKbps != null
+                        ? `${detail.data.bitrateKbps} kbps`
+                        : null
+                    }
+                  />
+                  <DetailRow label="Codec" value={detail.data.codec} />
+                  <DetailRow
+                    label="Size"
+                    value={formatBytes(detail.data.sizeBytes)}
+                  />
+                  <DetailRow
+                    label="Modified"
+                    value={new Date(detail.data.modified).toLocaleString()}
+                  />
+                </dl>
+              )}
+            </div>
           </>
         )}
       </aside>
