@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { FilenameInferenceResult } from "@/lib/inferArtistTitleFromFilename";
 
 type InferState =
@@ -87,11 +87,13 @@ export function InferFromFilenamePanel({
   filename,
   onRenamed,
   onTagsSaved,
+  actions,
 }: {
   filename: string;
   onRenamed?: (newFilename: string) => void;
   /** Called after ID3 tags are written successfully (file + server cache). */
   onTagsSaved?: () => void;
+  actions?: ReactNode;
 }) {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [state, setState] = useState<InferState>({ status: "idle" });
@@ -383,14 +385,17 @@ export function InferFromFilenamePanel({
       className="mt-4 border-t border-zinc-200 pt-4 dark:border-zinc-700"
       aria-label="Edit track"
     >
-      <button
-        type="button"
-        onClick={runInfer}
-        disabled={state.status === "loading"}
-        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-      >
-        {state.status === "loading" ? "Loading…" : "Edit"}
-      </button>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={runInfer}
+          disabled={state.status === "loading"}
+          className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 transition-colors hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+        >
+          {state.status === "loading" ? "Loading…" : "Edit"}
+        </button>
+        {actions}
+      </div>
 
       {dialogOpen ? (
         <dialog

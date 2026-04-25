@@ -494,6 +494,20 @@ export function MusicLibraryControl() {
                     /* keep previous list */
                   }
                 }}
+                actions={
+                  deleteConfirm ? null : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteConfirm(true);
+                        setDeleteError(null);
+                      }}
+                      className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
+                    >
+                      Delete file…
+                    </button>
+                  )
+                }
               />
               {deleteConfirm ? (
                 <div className="mt-2 flex flex-col gap-2">
@@ -563,18 +577,7 @@ export function MusicLibraryControl() {
                     </button>
                   </div>
                 </div>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDeleteConfirm(true);
-                    setDeleteError(null);
-                  }}
-                  className="mt-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
-                >
-                  Delete file…
-                </button>
-              )}
+              ) : null}
               {deleteError ? (
                 <p className="mt-2 text-sm text-red-600 dark:text-red-400">
                   {deleteError}
@@ -587,71 +590,85 @@ export function MusicLibraryControl() {
                   {detail.message}
                 </p>
               ) : (
-                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2 text-sm">
-                  <DetailRow label="File" value={detail.data.filename} />
-                  <DetailRow
-                    label="Track #"
-                    value={
-                      detail.data.trackNumber != null
-                        ? String(detail.data.trackNumber)
-                        : null
-                    }
-                  />
-                  <DetailRow
-                    label="Title"
-                    value={detail.data.title}
-                    suffix={
-                      detail.data.titleSource === "filename" ? (
-                        <span className="text-zinc-500 dark:text-zinc-400">
-                          {" "}
-                          · inferred from filename
-                        </span>
-                      ) : null
-                    }
-                  />
-                  <DetailRow
-                    label="Artist"
-                    value={detail.data.artist}
-                    suffix={
-                      detail.data.artistSource === "filename" ? (
-                        <span className="text-zinc-500 dark:text-zinc-400">
-                          {" "}
-                          · inferred from filename
-                        </span>
-                      ) : null
-                    }
-                  />
-                  <DetailRow label="Album" value={detail.data.album} />
-                  <DetailRow label="Genre" value={detail.data.genre} />
-                  <DetailRow label="Comments" value={detail.data.comments} />
-                  <DetailRow
-                    label="Year"
-                    value={
-                      detail.data.year != null ? String(detail.data.year) : null
-                    }
-                  />
-                  <DetailRow
-                    label="Duration"
-                    value={formatDuration(detail.data.durationSec)}
-                  />
-                  <DetailRow
-                    label="Bitrate"
-                    value={
-                      detail.data.bitrateKbps != null
-                        ? `${detail.data.bitrateKbps} kbps`
-                        : null
-                    }
-                  />
-                  <DetailRow label="Codec" value={detail.data.codec} />
-                  <DetailRow
-                    label="Size"
-                    value={formatBytes(detail.data.sizeBytes)}
-                  />
-                  <DetailRow
-                    label="Modified"
-                    value={new Date(detail.data.modified).toLocaleString()}
-                  />
-                </dl>
+                <div className="text-sm">
+                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                    <DetailRow label="File" value={detail.data.filename} />
+                    <DetailRow
+                      label="Title"
+                      value={detail.data.title}
+                      suffix={
+                        detail.data.titleSource === "filename" ? (
+                          <span className="text-zinc-500 dark:text-zinc-400">
+                            {" "}
+                            · inferred from filename
+                          </span>
+                        ) : null
+                      }
+                    />
+                    <DetailRow
+                      label="Artist"
+                      value={detail.data.artist}
+                      suffix={
+                        detail.data.artistSource === "filename" ? (
+                          <span className="text-zinc-500 dark:text-zinc-400">
+                            {" "}
+                            · inferred from filename
+                          </span>
+                        ) : null
+                      }
+                    />
+                    <DetailRow label="Album" value={detail.data.album} />
+                  </dl>
+                  <details className="mt-3">
+                    <summary className="cursor-pointer text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100">
+                      More details
+                    </summary>
+                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                      <DetailRow
+                        label="Track #"
+                        value={
+                          detail.data.trackNumber != null
+                            ? String(detail.data.trackNumber)
+                            : null
+                        }
+                      />
+                      <DetailRow label="Genre" value={detail.data.genre} />
+                      <DetailRow
+                        label="Comments"
+                        value={detail.data.comments}
+                      />
+                      <DetailRow
+                        label="Year"
+                        value={
+                          detail.data.year != null
+                            ? String(detail.data.year)
+                            : null
+                        }
+                      />
+                      <DetailRow
+                        label="Duration"
+                        value={formatDuration(detail.data.durationSec)}
+                      />
+                      <DetailRow
+                        label="Bitrate"
+                        value={
+                          detail.data.bitrateKbps != null
+                            ? `${detail.data.bitrateKbps} kbps`
+                            : null
+                        }
+                      />
+                      <DetailRow label="Codec" value={detail.data.codec} />
+                      <DetailRow
+                        label="Size"
+                        value={formatBytes(detail.data.sizeBytes)}
+                      />
+                      <DetailRow
+                        label="Modified"
+                        value={new Date(detail.data.modified).toLocaleString()}
+                      />
+                    </dl>
+                  </details>
+                </div>
               )}
             </div>
           </>
