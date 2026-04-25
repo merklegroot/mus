@@ -142,11 +142,11 @@ function TableSection<T>({
   ariaLabel: string;
 }) {
   const panel =
-    "w-full max-w-5xl rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
+    "w-full rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
 
   return (
     <section
-      className={`${panel} mx-auto max-h-[min(70vh,48rem)] min-h-0`}
+      className={`${panel} max-h-[min(70vh,48rem)] min-h-0`}
       aria-label={ariaLabel}
     >
       <h2 className="mb-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">
@@ -199,7 +199,7 @@ export default async function DataPage() {
     .all();
 
   const panel =
-    "w-full max-w-5xl rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
+    "w-full rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
 
   const trackColumns: Column<(typeof trackRows)[number]>[] = [
     { key: "id", label: "id", render: (r) => r.id },
@@ -337,8 +337,8 @@ export default async function DataPage() {
   ];
 
   return (
-    <main className="flex flex-1 flex-col items-center gap-6 px-4 py-10 lg:items-stretch lg:px-8">
-      <section className={`${panel} mx-auto`} aria-label="Library index state">
+    <main className="flex flex-1 flex-col gap-6">
+      <section className={panel} aria-label="Library index state">
         <h2 className="mb-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">
           library_state
         </h2>

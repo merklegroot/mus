@@ -375,7 +375,7 @@ export function MusicLibraryControl() {
     "rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
 
   return (
-    <div className="grid w-full max-w-[120rem] grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-4 lg:items-stretch">
+    <div className="grid w-full grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-4 lg:items-stretch">
       <div
         className={`flex h-full min-h-0 min-w-0 flex-col lg:max-h-[min(90vh,56rem)] ${selected ? "max-lg:hidden" : ""}`}
       >

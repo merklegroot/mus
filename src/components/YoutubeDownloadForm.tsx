@@ -51,7 +51,7 @@ export function YoutubeDownloadForm() {
 
   return (
     <section
-      className="mt-10 w-full max-w-xl rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40"
+      className="w-full rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40"
       aria-label="Download audio from YouTube"
     >
       <h2 className="mb-3 text-sm font-medium text-zinc-800 dark:text-zinc-200">

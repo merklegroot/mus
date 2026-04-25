@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function TubePage() {
   return (
-    <main className="flex flex-1 flex-col items-center px-4 py-10">
+    <main className="flex flex-1 flex-col">
       <YoutubeDownloadForm />
     </main>
   );

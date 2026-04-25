@@ -92,11 +92,11 @@ export default async function ArtistDetailPage({
     : undefined;
 
   const panel =
-    "w-full max-w-[120rem] rounded-lg border border-zinc-200 bg-zinc-50/80 p-6 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
+    "w-full rounded-lg border border-zinc-200 bg-zinc-50/80 p-6 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
 
   return (
-    <main className="flex flex-1 flex-col items-center gap-6 px-2 py-10 sm:px-4 lg:px-4">
-      <div className={`${panel} mx-auto flex flex-col gap-6`}>
+    <main className="flex flex-1 flex-col gap-6">
+      <div className={`${panel} flex flex-col gap-6`}>
         <nav className="text-sm">
           <Link
             href="/"

@@ -475,7 +475,7 @@ export function SetlistManager() {
   return (
     <>
     <main
-      className={`flex flex-1 flex-col items-center gap-6 px-4 py-10 lg:items-stretch lg:px-8 ${
+      className={`flex flex-1 flex-col gap-6 ${
         playingFilename && isPlayerVisible
           ? "pb-36"
           : hasHiddenPlayer
@@ -483,7 +483,7 @@ export function SetlistManager() {
             : ""
       }`}
     >
-      <section className={`${panelClass} mx-auto w-full max-w-5xl`}>
+      <section className={`${panelClass} w-full`}>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
           Setlists
         </h1>
@@ -492,7 +492,7 @@ export function SetlistManager() {
         </p>
       </section>
 
-      <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[18rem_1fr]">
+      <div className="grid w-full gap-6 lg:grid-cols-[18rem_1fr]">
         <section className={panelClass} aria-label="Setlist list">
           <form
             className="flex gap-2"
@@ -750,7 +750,7 @@ export function SetlistManager() {
         className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
         aria-label="Music player"
       >
-        <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="flex w-full flex-col gap-3 sm:flex-row sm:items-center">
           <div className="min-w-0 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-2 sm:w-80 dark:border-zinc-800 dark:bg-zinc-900/60">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Playback queue ({queueFilenames.length + 1})
@@ -831,7 +831,7 @@ export function SetlistManager() {
         className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
         aria-label="Hidden music player"
       >
-        <div className="mx-auto flex max-w-5xl items-center gap-3">
+        <div className="flex w-full items-center gap-3">
           <div className="min-w-0 flex-1">
             <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
               Player hidden
