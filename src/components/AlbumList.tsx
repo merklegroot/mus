@@ -6,9 +6,7 @@ type AlbumListProps = {
   errorMessage?: string;
   /** Distinct non-empty album tags for the current artist scope (or all songs). */
   albums: string[];
-  selectedAlbum: string | null;
   onAlbumClick: (album: string) => void;
-  onClearAlbumFilter: () => void;
   onClearArtistFilter: () => void;
   /** When set, albums are scoped to this artist; used only for empty copy. */
   filterArtist: string | null;
@@ -18,9 +16,7 @@ export function AlbumList({
   status,
   errorMessage,
   albums,
-  selectedAlbum,
   onAlbumClick,
-  onClearAlbumFilter,
   onClearArtistFilter,
   filterArtist,
 }: AlbumListProps) {
@@ -37,32 +33,16 @@ export function AlbumList({
               · {filterArtist}
             </span>
           ) : null}
-          {selectedAlbum ? (
-            <span className="ml-1.5 text-sm font-normal text-zinc-500 dark:text-zinc-400">
-              · {selectedAlbum}
-            </span>
-          ) : null}
         </h2>
-        {filterArtist || selectedAlbum ? (
+        {filterArtist ? (
           <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
-            {filterArtist ? (
-              <button
-                type="button"
-                onClick={onClearArtistFilter}
-                className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-              >
-                Clear artist
-              </button>
-            ) : null}
-            {selectedAlbum ? (
-              <button
-                type="button"
-                onClick={onClearAlbumFilter}
-                className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-              >
-                Clear album
-              </button>
-            ) : null}
+            <button
+              type="button"
+              onClick={onClearArtistFilter}
+              className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+            >
+              Clear artist
+            </button>
           </div>
         ) : null}
       </div>
@@ -87,11 +67,7 @@ export function AlbumList({
               <button
                 type="button"
                 onClick={() => onAlbumClick(name)}
-                className={`w-full rounded-md px-2 py-1.5 text-left transition-colors ${
-                  selectedAlbum === name
-                    ? "bg-zinc-200 font-medium text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
-                    : "text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
-                }`}
+                className="w-full rounded-md px-2 py-1.5 text-left text-zinc-800 transition-colors hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
               >
                 {name}
               </button>

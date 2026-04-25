@@ -11,6 +11,8 @@ type SongListEntry = {
   filename: string;
   /** ID3 artist when present, otherwise primary filename inference (same merge as track details). */
   artist: string | null;
+  /** ID3 title when present, otherwise primary filename inference. */
+  title: string | null;
   /** Cached ID3 album from DB (no filename inference). */
   album: string | null;
 };
@@ -40,7 +42,7 @@ export async function GET() {
     const db = getDb();
     const metaByFile = new Map<
       string,
-      { artist: string | null; album: string | null }
+      { artist: string | null; title: string | null; album: string | null }
     >();
     const chunkSize = 400;
     for (let i = 0; i < names.length; i += chunkSize) {
@@ -49,6 +51,7 @@ export async function GET() {
         .select({
           filename: tracks.filename,
           artist: tracks.artist,
+          title: tracks.title,
           album: tracks.album,
         })
         .from(tracks)
@@ -57,6 +60,7 @@ export async function GET() {
       for (const r of rows) {
         metaByFile.set(r.filename, {
           artist: r.artist,
+          title: r.title,
           album: r.album,
         });
       }
@@ -67,6 +71,10 @@ export async function GET() {
       return {
         filename,
         artist: mergedArtistForFilename(filename, row?.artist),
+        title:
+          typeof row?.title === "string" && row.title.trim() !== ""
+            ? row.title.trim()
+            : null,
         album: id3AlbumOnly(row?.album),
       };
     });

@@ -7,7 +7,12 @@ import { ArtistList } from "@/components/ArtistList";
 import { InferFromFilenamePanel } from "@/components/InferFromFilenamePanel";
 import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
 
-type SongRow = { filename: string; artist: string | null; album: string | null };
+type SongRow = {
+  filename: string;
+  artist: string | null;
+  title: string | null;
+  album: string | null;
+};
 
 type MusicLibraryControlState =
   | { status: "loading" }
@@ -46,7 +51,14 @@ function parseSongsResponse(data: unknown):
             : typeof rawAlbum === "string" && rawAlbum.trim() !== ""
               ? rawAlbum.trim()
               : null;
-        songs.push({ filename, artist, album });
+        const rawTitle = (item as { title?: unknown }).title;
+        const title =
+          rawTitle === null || rawTitle === undefined
+            ? null
+            : typeof rawTitle === "string" && rawTitle.trim() !== ""
+              ? rawTitle.trim()
+              : null;
+        songs.push({ filename, artist, title, album });
       }
     }
     return { ok: true, songs };
@@ -59,6 +71,7 @@ function parseSongsResponse(data: unknown):
       songs: mp3s.map((filename) => ({
         filename,
         artist: null,
+        title: null,
         album: null,
       })),
     };
@@ -94,6 +107,17 @@ function albumMatches(
   const a = songAlbum?.trim() ?? "";
   const b = filterAlbum.trim();
   return a.length > 0 && a === b;
+}
+
+function songListDisplay(s: SongRow):
+  | { kind: "metadata"; artist: string | null; title: string }
+  | { kind: "filename"; filename: string } {
+  const inferred = inferArtistTitleFromFilename(s.filename).primary;
+  const title = s.title?.trim() || inferred.title?.trim() || null;
+  if (!title) return { kind: "filename", filename: s.filename };
+
+  const artist = s.artist?.trim() || inferred.artist?.trim() || null;
+  return { kind: "metadata", artist, title };
 }
 
 type Mp3Details = {
@@ -204,6 +228,32 @@ export function MusicLibraryControl() {
       return true;
     });
   }, [state, filterArtist, filterAlbum]);
+
+  const visibleSongGroups = useMemo(() => {
+    const groups = new Map<
+      string,
+      {
+        artist: string;
+        songs: { row: SongRow; display: ReturnType<typeof songListDisplay> }[];
+      }
+    >();
+
+    for (const row of visibleSongs) {
+      const display = songListDisplay(row);
+      const artist =
+        display.kind === "metadata" && display.artist
+          ? display.artist
+          : "Unknown Artist";
+      const group = groups.get(artist);
+      if (group) {
+        group.songs.push({ row, display });
+      } else {
+        groups.set(artist, { artist, songs: [{ row, display }] });
+      }
+    }
+
+    return [...groups.values()].sort((a, b) => a.artist.localeCompare(b.artist));
+  }, [visibleSongs]);
 
   const albumList = useMemo(() => {
     if (state.status !== "ready") return [];
@@ -346,12 +396,10 @@ export function MusicLibraryControl() {
           status={albumListStatus}
           errorMessage={state.status === "error" ? state.message : undefined}
           albums={albumList}
-          selectedAlbum={filterAlbum}
           filterArtist={filterArtist}
           onAlbumClick={(album) => {
             setFilterAlbum((prev) => (prev === album ? null : album));
           }}
-          onClearAlbumFilter={() => setFilterAlbum(null)}
           onClearArtistFilter={() => setFilterArtist(null)}
         />
       </div>
@@ -415,25 +463,49 @@ export function MusicLibraryControl() {
             </button>
           </p>
         ) : (
-          <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm">
-            {visibleSongs.map((row, idx) => (
-              <li key={`${row.filename}:${idx}`}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelected(row.filename);
-                    setDetail({ status: "loading" });
-                  }}
-                  className={`w-full rounded-md px-2 py-2 text-left break-all transition-colors ${selected === row.filename
-                      ? "bg-zinc-200 font-medium text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
-                      : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-                    }`}
+          <div className="min-h-0 flex-1 space-y-3 overflow-y-auto text-sm">
+            {visibleSongGroups.map((group) => (
+              <section
+                key={group.artist}
+                aria-label={`Songs by ${group.artist}`}
+                className="border-t border-zinc-200 pt-3 first:border-t-0 first:pt-0 dark:border-zinc-800"
+              >
+                <h3
+                  className="mb-1 truncate px-2 text-xs font-semibold uppercase tracking-wide text-zinc-700 dark:text-zinc-200"
+                  title={group.artist}
                 >
-                  {row.filename}
-                </button>
-              </li>
+                  {group.artist}
+                </h3>
+                <ul className="space-y-0.5 pl-2">
+                  {group.songs.map(({ row, display }, idx) => (
+                    <li key={`${row.filename}:${idx}`}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelected(row.filename);
+                          setDetail({ status: "loading" });
+                        }}
+                        className={`w-full rounded-md px-2 py-2 text-left transition-colors ${selected === row.filename
+                            ? "bg-zinc-200 font-medium text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
+                            : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                          }`}
+                      >
+                        {display.kind === "metadata" ? (
+                          <span className="block min-w-0 break-words">
+                            {display.title}
+                          </span>
+                        ) : (
+                          <span className="block break-all">
+                            {display.filename}
+                          </span>
+                        )}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </section>
             ))}
-          </ul>
+          </div>
         )}
       </section>
 
