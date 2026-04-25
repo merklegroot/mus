@@ -172,9 +172,9 @@ export function MusicLibraryControl() {
     if (!res.ok) {
       const message =
         typeof data === "object" &&
-        data !== null &&
-        "error" in data &&
-        typeof (data as { error: unknown }).error === "string"
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
           ? (data as { error: string }).error
           : res.statusText;
       setState({ status: "error", message });
@@ -294,9 +294,9 @@ export function MusicLibraryControl() {
         if (!res.ok) {
           const message =
             typeof data === "object" &&
-            data !== null &&
-            "error" in data &&
-            typeof (data as { error: unknown }).error === "string"
+              data !== null &&
+              "error" in data &&
+              typeof (data as { error: unknown }).error === "string"
               ? (data as { error: string }).error
               : res.statusText;
           setDetail({ status: "error", message });
@@ -423,11 +423,10 @@ export function MusicLibraryControl() {
                     setSelected(row.filename);
                     setDetail({ status: "loading" });
                   }}
-                  className={`w-full rounded-md px-2 py-2 text-left break-all transition-colors ${
-                    selected === row.filename
+                  className={`w-full rounded-md px-2 py-2 text-left break-all transition-colors ${selected === row.filename
                       ? "bg-zinc-200 font-medium text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
                       : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-                  }`}
+                    }`}
                 >
                   {row.filename}
                 </button>
@@ -496,102 +495,91 @@ export function MusicLibraryControl() {
                   }
                 }}
               />
-              <section
-                className="mt-4 rounded-lg border border-red-200 bg-red-50/60 p-3 dark:border-red-900/55 dark:bg-red-950/25"
-                aria-label="Delete file"
-              >
-                <h3 className="text-sm font-semibold uppercase tracking-wide text-red-800 dark:text-red-300">
-                  Delete file
-                </h3>
-                <p className="mt-1 text-xs text-red-900/85 dark:text-red-200/85">
-                  Removes this MP3 from your music folder on disk. This cannot be undone.
-                </p>
-                {deleteConfirm ? (
-                  <div className="mt-2 flex flex-col gap-2">
-                    <p className="break-all text-xs text-red-950 dark:text-red-100">
-                      Delete <span className="font-mono">{selected}</span>?
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        disabled={deleteBusy}
-                        onClick={() => {
-                          setDeleteConfirm(false);
-                          setDeleteError(null);
-                        }}
-                        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                      >
-                        Cancel
-                      </button>
-                      <button
-                        type="button"
-                        disabled={deleteBusy}
-                        onClick={async () => {
-                          if (!selected) return;
-                          setDeleteBusy(true);
-                          setDeleteError(null);
-                          try {
-                            const res = await fetch(
-                              `/api/mp3s/${encodeURIComponent(selected)}`,
-                              { method: "DELETE" },
-                            );
-                            const data: unknown = await res.json().catch(() => ({}));
-                            if (!res.ok) {
-                              const message =
-                                typeof data === "object" &&
+              {deleteConfirm ? (
+                <div className="mt-2 flex flex-col gap-2">
+                  <p className="break-all text-xs text-red-950 dark:text-red-100">
+                    Delete <span className="font-mono">{selected}</span>?
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <button
+                      type="button"
+                      disabled={deleteBusy}
+                      onClick={() => {
+                        setDeleteConfirm(false);
+                        setDeleteError(null);
+                      }}
+                      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      disabled={deleteBusy}
+                      onClick={async () => {
+                        if (!selected) return;
+                        setDeleteBusy(true);
+                        setDeleteError(null);
+                        try {
+                          const res = await fetch(
+                            `/api/mp3s/${encodeURIComponent(selected)}`,
+                            { method: "DELETE" },
+                          );
+                          const data: unknown = await res.json().catch(() => ({}));
+                          if (!res.ok) {
+                            const message =
+                              typeof data === "object" &&
                                 data !== null &&
                                 "error" in data &&
                                 typeof (data as { error: unknown }).error === "string"
-                                  ? (data as { error: string }).error
-                                  : res.statusText;
-                              setDeleteError(message);
-                              return;
-                            }
-                            setSelected(null);
-                            setDetail(null);
-                            setDeleteConfirm(false);
-                            const listRes = await fetch("/api/mp3s");
-                            const listData: unknown = await listRes.json();
-                            if (!listRes.ok) return;
-                            const parsed = parseSongsResponse(listData);
-                            if (!parsed.ok) return;
-                            if (parsed.songs.length === 0) {
-                              setState({ status: "empty" });
-                            } else {
-                              setState({ status: "ready", songs: parsed.songs });
-                            }
-                          } catch (e) {
-                            setDeleteError(
-                              e instanceof Error ? e.message : String(e),
-                            );
-                          } finally {
-                            setDeleteBusy(false);
+                                ? (data as { error: string }).error
+                                : res.statusText;
+                            setDeleteError(message);
+                            return;
                           }
-                        }}
-                        className="rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
-                      >
-                        {deleteBusy ? "Deleting…" : "Delete permanently"}
-                      </button>
-                    </div>
+                          setSelected(null);
+                          setDetail(null);
+                          setDeleteConfirm(false);
+                          const listRes = await fetch("/api/mp3s");
+                          const listData: unknown = await listRes.json();
+                          if (!listRes.ok) return;
+                          const parsed = parseSongsResponse(listData);
+                          if (!parsed.ok) return;
+                          if (parsed.songs.length === 0) {
+                            setState({ status: "empty" });
+                          } else {
+                            setState({ status: "ready", songs: parsed.songs });
+                          }
+                        } catch (e) {
+                          setDeleteError(
+                            e instanceof Error ? e.message : String(e),
+                          );
+                        } finally {
+                          setDeleteBusy(false);
+                        }
+                      }}
+                      className="rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
+                    >
+                      {deleteBusy ? "Deleting…" : "Delete permanently"}
+                    </button>
                   </div>
-                ) : (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDeleteConfirm(true);
-                      setDeleteError(null);
-                    }}
-                    className="mt-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
-                  >
-                    Delete file…
-                  </button>
-                )}
-                {deleteError ? (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                    {deleteError}
-                  </p>
-                ) : null}
-              </section>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDeleteConfirm(true);
+                    setDeleteError(null);
+                  }}
+                  className="mt-2 rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
+                >
+                  Delete file…
+                </button>
+              )}
+              {deleteError ? (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                  {deleteError}
+                </p>
+              ) : null}
               {!detail || detail.status === "loading" ? (
                 <p className="text-sm text-zinc-500">Loading…</p>
               ) : detail.status === "error" ? (
