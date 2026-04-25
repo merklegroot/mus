@@ -331,7 +331,7 @@ export function MusicLibraryControl() {
       >
         <ArtistList
           showDiscogsActions={false}
-          selectedArtist={filterArtist}
+          selectedArtist={null}
           onArtistClick={(artist) => {
             setFilterArtist((prev) => (prev === artist ? null : artist));
           }}
@@ -352,6 +352,7 @@ export function MusicLibraryControl() {
             setFilterAlbum((prev) => (prev === album ? null : album));
           }}
           onClearAlbumFilter={() => setFilterAlbum(null)}
+          onClearArtistFilter={() => setFilterArtist(null)}
         />
       </div>
 

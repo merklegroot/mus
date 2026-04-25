@@ -9,6 +9,7 @@ type AlbumListProps = {
   selectedAlbum: string | null;
   onAlbumClick: (album: string) => void;
   onClearAlbumFilter: () => void;
+  onClearArtistFilter: () => void;
   /** When set, albums are scoped to this artist; used only for empty copy. */
   filterArtist: string | null;
 };
@@ -20,6 +21,7 @@ export function AlbumList({
   selectedAlbum,
   onAlbumClick,
   onClearAlbumFilter,
+  onClearArtistFilter,
   filterArtist,
 }: AlbumListProps) {
   const panelClass =
@@ -30,20 +32,38 @@ export function AlbumList({
       <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
         <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
           Albums
+          {filterArtist ? (
+            <span className="ml-1.5 text-sm font-normal text-zinc-500 dark:text-zinc-400">
+              · {filterArtist}
+            </span>
+          ) : null}
           {selectedAlbum ? (
             <span className="ml-1.5 text-sm font-normal text-zinc-500 dark:text-zinc-400">
               · {selectedAlbum}
             </span>
           ) : null}
         </h2>
-        {selectedAlbum ? (
-          <button
-            type="button"
-            onClick={onClearAlbumFilter}
-            className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-          >
-            Clear filter
-          </button>
+        {filterArtist || selectedAlbum ? (
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5">
+            {filterArtist ? (
+              <button
+                type="button"
+                onClick={onClearArtistFilter}
+                className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              >
+                Clear artist
+              </button>
+            ) : null}
+            {selectedAlbum ? (
+              <button
+                type="button"
+                onClick={onClearAlbumFilter}
+                className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              >
+                Clear album
+              </button>
+            ) : null}
+          </div>
         ) : null}
       </div>
       {status === "loading" ? (
