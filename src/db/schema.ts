@@ -83,37 +83,37 @@ export type DiscogsReleaseTracklistRow =
 export type NewDiscogsReleaseTracklistRow =
   typeof discogsReleaseTracklists.$inferInsert;
 
-/** User-managed playlist containers. */
-export const playlists = sqliteTable("playlists", {
+/** User-managed setlist containers. */
+export const setlists = sqliteTable("setlists", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   name: text("name").notNull(),
   createdAt: integer("created_at", { mode: "number" }).notNull(),
   updatedAt: integer("updated_at", { mode: "number" }).notNull(),
 });
 
-export type Playlist = typeof playlists.$inferSelect;
-export type NewPlaylist = typeof playlists.$inferInsert;
+export type Setlist = typeof setlists.$inferSelect;
+export type NewSetlist = typeof setlists.$inferInsert;
 
-/** Ordered MP3 filenames assigned to playlists. */
-export const playlistTracks = sqliteTable(
-  "playlist_tracks",
+/** Ordered MP3 filenames assigned to setlists. */
+export const setlistTracks = sqliteTable(
+  "setlist_tracks",
   {
     id: integer("id").primaryKey({ autoIncrement: true }),
-    playlistId: integer("playlist_id")
+    setlistId: integer("setlist_id")
       .notNull()
-      .references(() => playlists.id, { onDelete: "cascade" }),
+      .references(() => setlists.id, { onDelete: "cascade" }),
     filename: text("filename").notNull(),
     position: integer("position").notNull(),
     addedAt: integer("added_at", { mode: "number" }).notNull(),
   },
   (table) => [
-    index("playlist_tracks_playlist_id_idx").on(table.playlistId),
-    uniqueIndex("playlist_tracks_playlist_filename_uq").on(
-      table.playlistId,
+    index("setlist_tracks_setlist_id_idx").on(table.setlistId),
+    uniqueIndex("setlist_tracks_setlist_filename_uq").on(
+      table.setlistId,
       table.filename,
     ),
   ],
 );
 
-export type PlaylistTrack = typeof playlistTracks.$inferSelect;
-export type NewPlaylistTrack = typeof playlistTracks.$inferInsert;
+export type SetlistTrack = typeof setlistTracks.$inferSelect;
+export type NewSetlistTrack = typeof setlistTracks.$inferInsert;

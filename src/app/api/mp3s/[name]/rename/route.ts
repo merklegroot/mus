@@ -6,7 +6,7 @@ import { getDb } from "@/db/client";
 import { tracks } from "@/db/schema";
 import { resolveMusicMp3 } from "@/lib/resolveMusicMp3";
 import { touchLibraryIndexStamp } from "@/lib/musicLibraryIndex";
-import { updatePlaylistTrackFilename } from "@/lib/playlists";
+import { updateSetlistTrackFilename } from "@/lib/setlists";
 
 export const dynamic = "force-dynamic";
 
@@ -119,9 +119,9 @@ export async function POST(
   }
 
   try {
-    updatePlaylistTrackFilename(resolved.segment, newFilename);
+    updateSetlistTrackFilename(resolved.segment, newFilename);
   } catch {
-    /* playlists are optional */
+    /* setlists are optional */
   }
 
   // Nudge list caching so it refreshes quickly.

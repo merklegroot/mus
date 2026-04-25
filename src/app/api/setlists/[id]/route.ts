@@ -1,14 +1,14 @@
 import { NextResponse } from "next/server";
 import {
-  deletePlaylist,
-  getPlaylist,
-  normalizePlaylistName,
-  updatePlaylistName,
-} from "@/lib/playlists";
+  deleteSetlist,
+  getSetlist,
+  normalizeSetlistName,
+  updateSetlistName,
+} from "@/lib/setlists";
 
 export const dynamic = "force-dynamic";
 
-function parsePlaylistId(raw: string): number | null {
+function parseSetlistId(raw: string): number | null {
   const id = Number.parseInt(raw, 10);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
@@ -18,17 +18,17 @@ export async function GET(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id: rawId } = await context.params;
-  const id = parsePlaylistId(rawId);
+  const id = parseSetlistId(rawId);
   if (!id) {
-    return NextResponse.json({ error: "Invalid playlist id" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid setlist id" }, { status: 400 });
   }
 
   try {
-    const playlist = getPlaylist(id);
-    if (!playlist) {
-      return NextResponse.json({ error: "Playlist not found" }, { status: 404 });
+    const setlist = getSetlist(id);
+    if (!setlist) {
+      return NextResponse.json({ error: "Setlist not found" }, { status: 404 });
     }
-    return NextResponse.json({ playlist });
+    return NextResponse.json({ setlist });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -40,9 +40,9 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id: rawId } = await context.params;
-  const id = parsePlaylistId(rawId);
+  const id = parseSetlistId(rawId);
   if (!id) {
-    return NextResponse.json({ error: "Invalid playlist id" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid setlist id" }, { status: 400 });
   }
 
   let body: unknown;
@@ -54,21 +54,21 @@ export async function PATCH(
 
   const name =
     typeof body === "object" && body !== null && "name" in body
-      ? normalizePlaylistName((body as { name: unknown }).name)
+      ? normalizeSetlistName((body as { name: unknown }).name)
       : null;
   if (!name) {
     return NextResponse.json(
-      { error: "Playlist name must be 1-80 characters" },
+      { error: "Setlist name must be 1-80 characters" },
       { status: 400 },
     );
   }
 
   try {
-    const playlist = updatePlaylistName(id, name);
-    if (!playlist) {
-      return NextResponse.json({ error: "Playlist not found" }, { status: 404 });
+    const setlist = updateSetlistName(id, name);
+    if (!setlist) {
+      return NextResponse.json({ error: "Setlist not found" }, { status: 404 });
     }
-    return NextResponse.json({ playlist });
+    return NextResponse.json({ setlist });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });
@@ -80,14 +80,14 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id: rawId } = await context.params;
-  const id = parsePlaylistId(rawId);
+  const id = parseSetlistId(rawId);
   if (!id) {
-    return NextResponse.json({ error: "Invalid playlist id" }, { status: 400 });
+    return NextResponse.json({ error: "Invalid setlist id" }, { status: 400 });
   }
 
   try {
-    if (!deletePlaylist(id)) {
-      return NextResponse.json({ error: "Playlist not found" }, { status: 404 });
+    if (!deleteSetlist(id)) {
+      return NextResponse.json({ error: "Setlist not found" }, { status: 404 });
     }
     return NextResponse.json({ ok: true });
   } catch (err) {

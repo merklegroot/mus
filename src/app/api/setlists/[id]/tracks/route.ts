@@ -1,13 +1,13 @@
 import { NextResponse } from "next/server";
 import {
-  addPlaylistTrack,
-  removePlaylistTrack,
-} from "@/lib/playlists";
+  addSetlistTrack,
+  removeSetlistTrack,
+} from "@/lib/setlists";
 import { resolveMusicMp3 } from "@/lib/resolveMusicMp3";
 
 export const dynamic = "force-dynamic";
 
-function parsePlaylistId(raw: string): number | null {
+function parseSetlistId(raw: string): number | null {
   const id = Number.parseInt(raw, 10);
   return Number.isSafeInteger(id) && id > 0 ? id : null;
 }
@@ -27,9 +27,9 @@ export async function POST(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id: rawId } = await context.params;
-  const playlistId = parsePlaylistId(rawId);
-  if (!playlistId) {
-    return NextResponse.json({ error: "Invalid playlist id" }, { status: 400 });
+  const setlistId = parseSetlistId(rawId);
+  if (!setlistId) {
+    return NextResponse.json({ error: "Invalid setlist id" }, { status: 400 });
   }
 
   let body: unknown;
@@ -53,18 +53,18 @@ export async function POST(
   }
 
   try {
-    const playlist = addPlaylistTrack(playlistId, resolved.segment);
-    if (!playlist) {
-      return NextResponse.json({ error: "Playlist not found" }, { status: 404 });
+    const setlist = addSetlistTrack(setlistId, resolved.segment);
+    if (!setlist) {
+      return NextResponse.json({ error: "Setlist not found" }, { status: 404 });
     }
-    return NextResponse.json({ playlist });
+    return NextResponse.json({ setlist });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     const status = message.includes("UNIQUE constraint failed") ? 409 : 500;
     return NextResponse.json(
       {
         error:
-          status === 409 ? "That song is already in this playlist" : message,
+          status === 409 ? "That song is already in this setlist" : message,
       },
       { status },
     );
@@ -76,9 +76,9 @@ export async function DELETE(
   context: { params: Promise<{ id: string }> },
 ) {
   const { id: rawId } = await context.params;
-  const playlistId = parsePlaylistId(rawId);
-  if (!playlistId) {
-    return NextResponse.json({ error: "Invalid playlist id" }, { status: 400 });
+  const setlistId = parseSetlistId(rawId);
+  if (!setlistId) {
+    return NextResponse.json({ error: "Invalid setlist id" }, { status: 400 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -88,11 +88,11 @@ export async function DELETE(
   }
 
   try {
-    const playlist = removePlaylistTrack(playlistId, filename);
-    if (!playlist) {
-      return NextResponse.json({ error: "Playlist not found" }, { status: 404 });
+    const setlist = removeSetlistTrack(setlistId, filename);
+    if (!setlist) {
+      return NextResponse.json({ error: "Setlist not found" }, { status: 404 });
     }
-    return NextResponse.json({ playlist });
+    return NextResponse.json({ setlist });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 
-type PlaylistSummary = {
+type SetlistSummary = {
   id: number;
   name: string;
   createdAt: number;
@@ -10,15 +10,15 @@ type PlaylistSummary = {
   trackCount: number;
 };
 
-type PlaylistTrack = {
+type SetlistTrack = {
   id: number;
   filename: string;
   position: number;
   addedAt: number;
 };
 
-type PlaylistDetails = PlaylistSummary & {
-  tracks: PlaylistTrack[];
+type SetlistDetails = SetlistSummary & {
+  tracks: SetlistTrack[];
 };
 
 type SongRow = {
@@ -39,7 +39,7 @@ function errorMessage(data: unknown, fallback: string): string {
   return fallback;
 }
 
-function isPlaylistSummary(value: unknown): value is PlaylistSummary {
+function isSetlistSummary(value: unknown): value is SetlistSummary {
   return (
     typeof value === "object" &&
     value !== null &&
@@ -49,10 +49,10 @@ function isPlaylistSummary(value: unknown): value is PlaylistSummary {
   );
 }
 
-function isPlaylistDetails(value: unknown): value is PlaylistDetails {
+function isSetlistDetails(value: unknown): value is SetlistDetails {
   const candidate = value as { tracks?: unknown };
   return (
-    isPlaylistSummary(value) &&
+    isSetlistSummary(value) &&
     Array.isArray(candidate.tracks)
   );
 }
@@ -65,10 +65,10 @@ function isSongRow(value: unknown): value is SongRow {
   );
 }
 
-export function PlaylistManager() {
-  const [playlists, setPlaylists] = useState<PlaylistSummary[]>([]);
+export function SetlistManager() {
+  const [setlists, setSetlists] = useState<SetlistSummary[]>([]);
   const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [selected, setSelected] = useState<PlaylistDetails | null>(null);
+  const [selected, setSelected] = useState<SetlistDetails | null>(null);
   const [songs, setSongs] = useState<SongRow[]>([]);
   const [newName, setNewName] = useState("");
   const [renameName, setRenameName] = useState("");
@@ -85,8 +85,8 @@ export function PlaylistManager() {
   const [isPlayerPlaying, setIsPlayerPlaying] = useState(false);
   const [shouldAutoPlay, setShouldAutoPlay] = useState(false);
 
-  async function loadPlaylists(nextSelectedId?: number | null) {
-    const res = await fetch("/api/playlists");
+  async function loadSetlists(nextSelectedId?: number | null) {
+    const res = await fetch("/api/setlists");
     const data: unknown = await res.json();
     if (!res.ok) {
       throw new Error(errorMessage(data, res.statusText));
@@ -94,10 +94,10 @@ export function PlaylistManager() {
     const rows =
       typeof data === "object" &&
       data !== null &&
-      Array.isArray((data as { playlists?: unknown }).playlists)
-        ? (data as { playlists: unknown[] }).playlists.filter(isPlaylistSummary)
+      Array.isArray((data as { setlists?: unknown }).setlists)
+        ? (data as { setlists: unknown[] }).setlists.filter(isSetlistSummary)
         : [];
-    setPlaylists(rows);
+    setSetlists(rows);
     const wantedId =
       nextSelectedId === undefined ? selectedId : nextSelectedId;
     const nextId =
@@ -109,24 +109,24 @@ export function PlaylistManager() {
       setSelected(null);
       return;
     }
-    await loadPlaylist(nextId);
+    await loadSetlist(nextId);
   }
 
-  async function loadPlaylist(id: number) {
-    const res = await fetch(`/api/playlists/${id}`);
+  async function loadSetlist(id: number) {
+    const res = await fetch(`/api/setlists/${id}`);
     const data: unknown = await res.json();
     if (!res.ok) {
       throw new Error(errorMessage(data, res.statusText));
     }
-    const playlist =
+    const setlist =
       typeof data === "object" && data !== null
-        ? (data as { playlist?: unknown }).playlist
+        ? (data as { setlist?: unknown }).setlist
         : null;
-    if (!isPlaylistDetails(playlist)) {
-      throw new Error("Invalid playlist response");
+    if (!isSetlistDetails(setlist)) {
+      throw new Error("Invalid setlist response");
     }
-    setSelected(playlist);
-    setRenameName(playlist.name);
+    setSelected(setlist);
+    setRenameName(setlist.name);
   }
 
   useEffect(() => {
@@ -136,30 +136,30 @@ export function PlaylistManager() {
       setLoading(true);
       setError(null);
       try {
-        const [playlistsRes, songsRes] = await Promise.all([
-          fetch("/api/playlists"),
+        const [setlistsRes, songsRes] = await Promise.all([
+          fetch("/api/setlists"),
           fetch("/api/mp3s"),
         ]);
-        const [playlistsData, songsData]: unknown[] = await Promise.all([
-          playlistsRes.json(),
+        const [setlistsData, songsData]: unknown[] = await Promise.all([
+          setlistsRes.json(),
           songsRes.json(),
         ]);
-        if (!playlistsRes.ok) {
-          throw new Error(errorMessage(playlistsData, playlistsRes.statusText));
+        if (!setlistsRes.ok) {
+          throw new Error(errorMessage(setlistsData, setlistsRes.statusText));
         }
         if (!songsRes.ok) {
           throw new Error(errorMessage(songsData, songsRes.statusText));
         }
         if (cancelled) return;
 
-        const playlistRows =
-          typeof playlistsData === "object" &&
-          playlistsData !== null &&
+        const setlistRows =
+          typeof setlistsData === "object" &&
+          setlistsData !== null &&
           Array.isArray(
-            (playlistsData as { playlists?: unknown }).playlists,
+            (setlistsData as { setlists?: unknown }).setlists,
           )
-            ? (playlistsData as { playlists: unknown[] }).playlists.filter(
-                isPlaylistSummary,
+            ? (setlistsData as { setlists: unknown[] }).setlists.filter(
+                isSetlistSummary,
               )
             : [];
         const songRows =
@@ -169,12 +169,12 @@ export function PlaylistManager() {
             ? (songsData as { songs: unknown[] }).songs.filter(isSongRow)
             : [];
 
-        setPlaylists(playlistRows);
+        setSetlists(setlistRows);
         setSongs(songRows);
-        const firstId = playlistRows[0]?.id ?? null;
+        const firstId = setlistRows[0]?.id ?? null;
         setSelectedId(firstId);
         if (firstId) {
-          await loadPlaylist(firstId);
+          await loadSetlist(firstId);
         }
       } catch (err) {
         if (!cancelled) {
@@ -251,91 +251,91 @@ export function PlaylistManager() {
     }
   }
 
-  async function createNewPlaylist() {
+  async function createNewSetlist() {
     const name = newName.trim();
     if (!name) return;
     await runAction(async () => {
-      const res = await fetch("/api/playlists", {
+      const res = await fetch("/api/setlists", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
       const data: unknown = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, res.statusText));
-      const playlist =
+      const setlist =
         typeof data === "object" && data !== null
-          ? (data as { playlist?: unknown }).playlist
+          ? (data as { setlist?: unknown }).setlist
           : null;
-      if (!isPlaylistDetails(playlist)) {
-        throw new Error("Invalid playlist response");
+      if (!isSetlistDetails(setlist)) {
+        throw new Error("Invalid setlist response");
       }
       setNewName("");
-      setSelectedId(playlist.id);
-      setSelected(playlist);
-      setRenameName(playlist.name);
-      await loadPlaylists(playlist.id);
+      setSelectedId(setlist.id);
+      setSelected(setlist);
+      setRenameName(setlist.name);
+      await loadSetlists(setlist.id);
     });
   }
 
-  async function renameSelectedPlaylist() {
+  async function renameSelectedSetlist() {
     if (!selected) return;
     const name = renameName.trim();
     if (!name) return;
     await runAction(async () => {
-      const res = await fetch(`/api/playlists/${selected.id}`, {
+      const res = await fetch(`/api/setlists/${selected.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name }),
       });
       const data: unknown = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, res.statusText));
-      const playlist =
+      const setlist =
         typeof data === "object" && data !== null
-          ? (data as { playlist?: unknown }).playlist
+          ? (data as { setlist?: unknown }).setlist
           : null;
-      if (!isPlaylistDetails(playlist)) {
-        throw new Error("Invalid playlist response");
+      if (!isSetlistDetails(setlist)) {
+        throw new Error("Invalid setlist response");
       }
-      setSelected(playlist);
-      setRenameName(playlist.name);
-      await loadPlaylists(playlist.id);
+      setSelected(setlist);
+      setRenameName(setlist.name);
+      await loadSetlists(setlist.id);
     });
   }
 
-  async function deleteSelectedPlaylist() {
+  async function deleteSelectedSetlist() {
     if (!selected) return;
-    const ok = window.confirm(`Delete playlist "${selected.name}"?`);
+    const ok = window.confirm(`Delete setlist "${selected.name}"?`);
     if (!ok) return;
     await runAction(async () => {
-      const res = await fetch(`/api/playlists/${selected.id}`, {
+      const res = await fetch(`/api/setlists/${selected.id}`, {
         method: "DELETE",
       });
       const data: unknown = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, res.statusText));
-      await loadPlaylists(null);
+      await loadSetlists(null);
     });
   }
 
   async function addSelectedSong() {
     if (!selected || !songToAdd) return;
     await runAction(async () => {
-      const res = await fetch(`/api/playlists/${selected.id}/tracks`, {
+      const res = await fetch(`/api/setlists/${selected.id}/tracks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ filename: songToAdd }),
       });
       const data: unknown = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, res.statusText));
-      const playlist =
+      const setlist =
         typeof data === "object" && data !== null
-          ? (data as { playlist?: unknown }).playlist
+          ? (data as { setlist?: unknown }).setlist
           : null;
-      if (!isPlaylistDetails(playlist)) {
-        throw new Error("Invalid playlist response");
+      if (!isSetlistDetails(setlist)) {
+        throw new Error("Invalid setlist response");
       }
-      setSelected(playlist);
+      setSelected(setlist);
       setSongToAdd("");
-      await loadPlaylists(playlist.id);
+      await loadSetlists(setlist.id);
     });
   }
 
@@ -344,23 +344,23 @@ export function PlaylistManager() {
     await runAction(async () => {
       const params = new URLSearchParams({ filename });
       const res = await fetch(
-        `/api/playlists/${selected.id}/tracks?${params.toString()}`,
+        `/api/setlists/${selected.id}/tracks?${params.toString()}`,
         { method: "DELETE" },
       );
       const data: unknown = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, res.statusText));
-      const playlist =
+      const setlist =
         typeof data === "object" && data !== null
-          ? (data as { playlist?: unknown }).playlist
+          ? (data as { setlist?: unknown }).setlist
           : null;
-      if (!isPlaylistDetails(playlist)) {
-        throw new Error("Invalid playlist response");
+      if (!isSetlistDetails(setlist)) {
+        throw new Error("Invalid setlist response");
       }
-      setSelected(playlist);
+      setSelected(setlist);
       if (selectedSongFilename === filename) {
         setSelectedSongFilename(null);
       }
-      await loadPlaylists(playlist.id);
+      await loadSetlists(setlist.id);
     });
   }
 
@@ -374,27 +374,27 @@ export function PlaylistManager() {
     >
       <section className={`${panelClass} mx-auto w-full max-w-5xl`}>
         <h1 className="text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-          Playlists
+          Setlists
         </h1>
         <p className="mt-1 text-sm text-zinc-500 dark:text-zinc-400">
-          Create playlists from the MP3s in your music folder.
+          Create setlists from the MP3s in your music folder.
         </p>
       </section>
 
       <div className="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[18rem_1fr]">
-        <section className={panelClass} aria-label="Playlist list">
+        <section className={panelClass} aria-label="Setlist list">
           <form
             className="flex gap-2"
             onSubmit={(event) => {
               event.preventDefault();
-              void createNewPlaylist();
+              void createNewSetlist();
             }}
           >
             <input
               type="text"
               value={newName}
               onChange={(event) => setNewName(event.target.value)}
-              placeholder="New playlist"
+              placeholder="New setlist"
               disabled={busy}
               className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
             />
@@ -410,30 +410,30 @@ export function PlaylistManager() {
           <div className="mt-4">
             {loading ? (
               <p className="text-sm text-zinc-500">Loading...</p>
-            ) : playlists.length === 0 ? (
-              <p className="text-sm text-zinc-500">No playlists yet.</p>
+            ) : setlists.length === 0 ? (
+              <p className="text-sm text-zinc-500">No setlists yet.</p>
             ) : (
               <ul className="space-y-1">
-                {playlists.map((playlist) => (
-                  <li key={playlist.id}>
+                {setlists.map((setlist) => (
+                  <li key={setlist.id}>
                     <button
                       type="button"
                       onClick={() => {
-                        setSelectedId(playlist.id);
-                        void runAction(() => loadPlaylist(playlist.id));
+                        setSelectedId(setlist.id);
+                        void runAction(() => loadSetlist(setlist.id));
                       }}
                       className={`w-full rounded-md px-3 py-2 text-left text-sm transition-colors ${
-                        selectedId === playlist.id
+                        selectedId === setlist.id
                           ? "bg-zinc-200 text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
                           : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
                       }`}
                     >
                       <span className="block truncate font-medium">
-                        {playlist.name}
+                        {setlist.name}
                       </span>
                       <span className="text-xs text-zinc-500">
-                        {playlist.trackCount} song
-                        {playlist.trackCount === 1 ? "" : "s"}
+                        {setlist.trackCount} song
+                        {setlist.trackCount === 1 ? "" : "s"}
                       </span>
                     </button>
                   </li>
@@ -443,7 +443,7 @@ export function PlaylistManager() {
           </div>
         </section>
 
-        <section className={panelClass} aria-label="Playlist details">
+        <section className={panelClass} aria-label="Setlist details">
           {error ? (
             <p className="mb-4 rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-900/60 dark:bg-red-950/30 dark:text-red-300">
               {error}
@@ -452,13 +452,13 @@ export function PlaylistManager() {
 
           {!selected ? (
             <p className="text-sm text-zinc-500">
-              Create a playlist or choose one from the list.
+              Create a setlist or choose one from the list.
             </p>
           ) : (
             <div className="space-y-6">
               <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
                 <label className="min-w-0 flex-1 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                  Playlist name
+                  Setlist name
                   <input
                     type="text"
                     value={renameName}
@@ -469,7 +469,7 @@ export function PlaylistManager() {
                 </label>
                 <button
                   type="button"
-                  onClick={() => void renameSelectedPlaylist()}
+                  onClick={() => void renameSelectedSetlist()}
                   disabled={busy || renameName.trim() === ""}
                   className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
                 >
@@ -477,7 +477,7 @@ export function PlaylistManager() {
                 </button>
                 <button
                   type="button"
-                  onClick={() => void deleteSelectedPlaylist()}
+                  onClick={() => void deleteSelectedSetlist()}
                   disabled={busy}
                   className="rounded-md border border-red-300 bg-white px-3 py-2 text-sm font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:border-red-800 dark:bg-zinc-950 dark:text-red-300 dark:hover:bg-red-950/40"
                 >
@@ -522,7 +522,7 @@ export function PlaylistManager() {
                 </h2>
                 {selected.tracks.length === 0 ? (
                   <p className="mt-2 text-sm text-zinc-500">
-                    This playlist is empty.
+                    This setlist is empty.
                   </p>
                 ) : (
                   <ol className="mt-3 space-y-2">
