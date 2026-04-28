@@ -154,6 +154,7 @@ export function SetlistManager() {
   const [renameName, setRenameName] = useState("");
   const [songToAdd, setSongToAdd] = useState("");
   const [songSearch, setSongSearch] = useState("");
+  const [isSongPickerOpen, setIsSongPickerOpen] = useState(false);
   const [notesDraft, setNotesDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -498,6 +499,7 @@ export function SetlistManager() {
       setSelected(setlist);
       setSongToAdd("");
       setSongSearch("");
+      setIsSongPickerOpen(false);
       await loadSetlists(setlist.id);
     });
   }
@@ -684,7 +686,7 @@ export function SetlistManager() {
               </div>
 
               <form
-                className="flex flex-col gap-3 sm:flex-row sm:items-start"
+                className="relative flex flex-col gap-3 sm:flex-row sm:items-start"
                 onSubmit={(event) => {
                   event.preventDefault();
                   void addSelectedSong();
@@ -695,11 +697,17 @@ export function SetlistManager() {
                     Add song
                     <input
                       type="search"
+                      role="combobox"
+                      aria-autocomplete="list"
                       value={songSearch}
+                      aria-expanded={isSongPickerOpen}
+                      aria-controls="setlist-song-picker-results"
                       onChange={(event) => {
                         setSongSearch(event.target.value);
                         setSongToAdd("");
+                        setIsSongPickerOpen(true);
                       }}
+                      onFocus={() => setIsSongPickerOpen(true)}
                       disabled={busy || availableSongs.length === 0}
                       placeholder={
                         availableSongs.length === 0
@@ -709,7 +717,49 @@ export function SetlistManager() {
                       className="mt-1 block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-zinc-500 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
                     />
                   </label>
-                  <div className="mt-2 rounded-md border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                  {songToAdd ? (
+                    <p className="mt-1 truncate text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                      Selected: {songToAdd}
+                    </p>
+                  ) : (
+                    <p className="mt-1 text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                      Type to search, then press Add to add the top match.
+                    </p>
+                  )}
+                </div>
+                <button
+                  type="submit"
+                  disabled={
+                    busy ||
+                    availableSongs.length === 0 ||
+                    (songToAdd === "" && songSearch.trim() === "") ||
+                    (songToAdd === "" && visibleSongMatches.length === 0)
+                  }
+                  className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 sm:mt-6 dark:bg-zinc-50 dark:text-zinc-950"
+                >
+                  Add
+                </button>
+                {isSongPickerOpen ? (
+                  <div
+                    id="setlist-song-picker-results"
+                    className="absolute left-0 right-0 top-full z-30 mt-2 rounded-md border border-zinc-200 bg-white shadow-lg dark:border-zinc-800 dark:bg-zinc-950 sm:right-20"
+                  >
+                    <div className="flex items-center justify-between gap-3 border-b border-zinc-200 px-3 py-2 dark:border-zinc-800">
+                      <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                        {availableSongs.length === 0
+                          ? "No songs available"
+                          : `${matchingSongs.length} match${
+                              matchingSongs.length === 1 ? "" : "es"
+                            }`}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => setIsSongPickerOpen(false)}
+                        className="rounded-md px-2 py-1 text-xs font-medium text-zinc-600 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:bg-zinc-900"
+                      >
+                        Close
+                      </button>
+                    </div>
                     {availableSongs.length === 0 ? (
                       <p className="p-3 text-sm font-normal text-zinc-500">
                         Every available song is already in this setlist.
@@ -720,7 +770,7 @@ export function SetlistManager() {
                       </p>
                     ) : (
                       <>
-                        <ul className="max-h-64 overflow-y-auto">
+                        <ul className="max-h-72 overflow-y-auto">
                           {visibleSongMatches.map((song) => {
                             const isChosen = songToAdd === song.filename;
                             return (
@@ -730,6 +780,7 @@ export function SetlistManager() {
                                   onClick={() => {
                                     setSongToAdd(song.filename);
                                     setSongSearch(song.filename);
+                                    setIsSongPickerOpen(false);
                                   }}
                                   disabled={busy}
                                   className={`w-full px-3 py-2 text-left transition-colors ${
@@ -763,19 +814,7 @@ export function SetlistManager() {
                       </>
                     )}
                   </div>
-                </div>
-                <button
-                  type="submit"
-                  disabled={
-                    busy ||
-                    availableSongs.length === 0 ||
-                    (songToAdd === "" && songSearch.trim() === "") ||
-                    (songToAdd === "" && visibleSongMatches.length === 0)
-                  }
-                  className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 sm:mt-6 dark:bg-zinc-50 dark:text-zinc-950"
-                >
-                  Add
-                </button>
+                ) : null}
               </form>
 
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
