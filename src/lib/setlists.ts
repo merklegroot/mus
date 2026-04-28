@@ -5,6 +5,7 @@ export type SetlistTrackEntry = {
   filename: string;
   position: number;
   addedAt: number;
+  notes: string;
 };
 
 export type SetlistSummary = {
@@ -32,6 +33,7 @@ type SetlistTrackRow = {
   filename: string;
   position: number;
   addedAt: number;
+  notes: string;
 };
 
 export function ensureSetlistTables(): void {
@@ -50,6 +52,7 @@ export function ensureSetlistTables(): void {
       filename TEXT NOT NULL,
       position INTEGER NOT NULL,
       added_at INTEGER NOT NULL,
+      notes TEXT NOT NULL DEFAULT '',
       FOREIGN KEY (setlist_id) REFERENCES setlists(id) ON DELETE CASCADE
     );
 
@@ -59,6 +62,13 @@ export function ensureSetlistTables(): void {
     CREATE UNIQUE INDEX IF NOT EXISTS setlist_tracks_setlist_filename_uq
       ON setlist_tracks(setlist_id, filename);
   `);
+
+  const trackColumns = sqlite
+    .prepare("PRAGMA table_info(setlist_tracks)")
+    .all() as Array<{ name: string }>;
+  if (!trackColumns.some((column) => column.name === "notes")) {
+    sqlite.exec("ALTER TABLE setlist_tracks ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+  }
 
   const oldSetlistsTable = sqlite
     .prepare(
@@ -92,6 +102,13 @@ export function normalizeSetlistName(name: unknown): string | null {
   if (typeof name !== "string") return null;
   const trimmed = name.trim();
   if (trimmed.length === 0 || trimmed.length > 80) return null;
+  return trimmed;
+}
+
+export function normalizeSetlistTrackNotes(notes: unknown): string | null {
+  if (typeof notes !== "string") return null;
+  const trimmed = notes.trim();
+  if (trimmed.length > 5000) return null;
   return trimmed;
 }
 
@@ -145,7 +162,7 @@ export function getSetlist(id: number): SetlistDetails | null {
 
   const tracks = sqlite
     .prepare(`
-      SELECT id, filename, position, added_at AS addedAt
+      SELECT id, filename, position, added_at AS addedAt, notes
       FROM setlist_tracks
       WHERE setlist_id = ?
       ORDER BY position ASC, id ASC
@@ -214,6 +231,29 @@ export function addSetlistTrack(
         "INSERT INTO setlist_tracks (setlist_id, filename, position, added_at) VALUES (?, ?, ?, ?)",
       )
       .run(setlistId, filename, row.nextPosition, now);
+    sqlite
+      .prepare("UPDATE setlists SET updated_at = ? WHERE id = ?")
+      .run(now, setlistId);
+    return getSetlist(setlistId);
+  })();
+}
+
+export function updateSetlistTrackNotes(
+  setlistId: number,
+  filename: string,
+  notes: string,
+): SetlistDetails | null {
+  ensureSetlistTables();
+  const sqlite = getSqliteDatabase();
+  return sqlite.transaction(() => {
+    const setlist = getSetlist(setlistId);
+    if (!setlist) return null;
+    const now = Date.now();
+    sqlite
+      .prepare(
+        "UPDATE setlist_tracks SET notes = ? WHERE setlist_id = ? AND filename = ?",
+      )
+      .run(notes, setlistId, filename);
     sqlite
       .prepare("UPDATE setlists SET updated_at = ? WHERE id = ?")
       .run(now, setlistId);

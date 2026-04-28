@@ -15,6 +15,7 @@ type SetlistTrack = {
   filename: string;
   position: number;
   addedAt: number;
+  notes: string;
 };
 
 type SetlistDetails = SetlistSummary & {
@@ -150,6 +151,8 @@ export function SetlistManager() {
   const [newName, setNewName] = useState("");
   const [renameName, setRenameName] = useState("");
   const [songToAdd, setSongToAdd] = useState("");
+  const [songSearch, setSongSearch] = useState("");
+  const [notesDraft, setNotesDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -280,8 +283,54 @@ export function SetlistManager() {
     [songs, selectedFilenames],
   );
 
+  const matchingSongs = useMemo(() => {
+    const terms = songSearch
+      .trim()
+      .toLowerCase()
+      .split(/\s+/)
+      .filter(Boolean);
+    if (terms.length === 0) return availableSongs;
+
+    return availableSongs.filter((song) => {
+      const searchable = [song.filename, song.artist, song.album]
+        .filter((value): value is string => typeof value === "string")
+        .join(" ")
+        .toLowerCase();
+      return terms.every((term) => searchable.includes(term));
+    });
+  }, [availableSongs, songSearch]);
+
+  const visibleSongMatches = useMemo(
+    () => matchingSongs.slice(0, 12),
+    [matchingSongs],
+  );
+
+  const selectedTrack = useMemo(
+    () =>
+      selected?.tracks.find((track) => track.filename === selectedSongFilename) ??
+      null,
+    [selected, selectedSongFilename],
+  );
+
+  useEffect(() => {
+    if (!selectedSongFilename) {
+      setNotesDraft("");
+      return;
+    }
+
+    if (!selectedTrack) {
+      setSelectedSongFilename(null);
+      setNotesDraft("");
+      return;
+    }
+
+    setNotesDraft(selectedTrack.notes);
+  }, [selectedSongFilename, selectedTrack]);
+
   function selectSong(filename: string) {
+    const track = selected?.tracks.find((item) => item.filename === filename);
     setSelectedSongFilename(filename);
+    setNotesDraft(track?.notes ?? "");
   }
 
   function playNow(filename: string) {
@@ -420,12 +469,14 @@ export function SetlistManager() {
   }
 
   async function addSelectedSong() {
-    if (!selected || !songToAdd) return;
+    if (!selected) return;
+    const filename = songToAdd || visibleSongMatches[0]?.filename;
+    if (!filename) return;
     await runAction(async () => {
       const res = await fetch(`/api/setlists/${selected.id}/tracks`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename: songToAdd }),
+        body: JSON.stringify({ filename }),
       });
       const data: unknown = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, res.statusText));
@@ -438,6 +489,7 @@ export function SetlistManager() {
       }
       setSelected(setlist);
       setSongToAdd("");
+      setSongSearch("");
       await loadSetlists(setlist.id);
     });
   }
@@ -462,7 +514,34 @@ export function SetlistManager() {
       setSelected(setlist);
       if (selectedSongFilename === filename) {
         setSelectedSongFilename(null);
+        setNotesDraft("");
       }
+      await loadSetlists(setlist.id);
+    });
+  }
+
+  async function saveSelectedSongNotes() {
+    if (!selected || !selectedSongFilename) return;
+    const filename = selectedSongFilename;
+    await runAction(async () => {
+      const res = await fetch(`/api/setlists/${selected.id}/tracks`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ filename, notes: notesDraft }),
+      });
+      const data: unknown = await res.json();
+      if (!res.ok) throw new Error(errorMessage(data, res.statusText));
+      const setlist =
+        typeof data === "object" && data !== null
+          ? (data as { setlist?: unknown }).setlist
+          : null;
+      if (!isSetlistDetails(setlist)) {
+        throw new Error("Invalid setlist response");
+      }
+      setSelected(setlist);
+      setNotesDraft(
+        setlist.tracks.find((track) => track.filename === filename)?.notes ?? "",
+      );
       await loadSetlists(setlist.id);
     });
   }
@@ -596,149 +675,271 @@ export function SetlistManager() {
                 </button>
               </div>
 
-              <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                <label className="min-w-0 flex-1 text-sm font-medium text-zinc-800 dark:text-zinc-200">
-                  Add song
-                  <select
-                    value={songToAdd}
-                    onChange={(event) => setSongToAdd(event.target.value)}
-                    disabled={busy || availableSongs.length === 0}
-                    className="mt-1 block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
-                  >
-                    <option value="">
-                      {availableSongs.length === 0
-                        ? "No songs available"
-                        : "Choose a song"}
-                    </option>
-                    {availableSongs.map((song) => (
-                      <option key={song.filename} value={song.filename}>
-                        {song.filename}
-                      </option>
-                    ))}
-                  </select>
-                </label>
+              <form
+                className="flex flex-col gap-3 sm:flex-row sm:items-start"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void addSelectedSong();
+                }}
+              >
+                <div className="min-w-0 flex-1 text-sm font-medium text-zinc-800 dark:text-zinc-200">
+                  <label className="block">
+                    Add song
+                    <input
+                      type="search"
+                      value={songSearch}
+                      onChange={(event) => {
+                        setSongSearch(event.target.value);
+                        setSongToAdd("");
+                      }}
+                      disabled={busy || availableSongs.length === 0}
+                      placeholder={
+                        availableSongs.length === 0
+                          ? "No songs available"
+                          : "Search by song, artist, or album"
+                      }
+                      className="mt-1 block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-zinc-500 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                    />
+                  </label>
+                  <div className="mt-2 rounded-md border border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950">
+                    {availableSongs.length === 0 ? (
+                      <p className="p-3 text-sm font-normal text-zinc-500">
+                        Every available song is already in this setlist.
+                      </p>
+                    ) : visibleSongMatches.length === 0 ? (
+                      <p className="p-3 text-sm font-normal text-zinc-500">
+                        No songs match that search.
+                      </p>
+                    ) : (
+                      <>
+                        <ul className="max-h-64 overflow-y-auto">
+                          {visibleSongMatches.map((song) => {
+                            const isChosen = songToAdd === song.filename;
+                            return (
+                              <li key={song.filename}>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSongToAdd(song.filename);
+                                    setSongSearch(song.filename);
+                                  }}
+                                  disabled={busy}
+                                  className={`w-full px-3 py-2 text-left transition-colors ${
+                                    isChosen
+                                      ? "bg-zinc-200 dark:bg-zinc-800"
+                                      : "hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                                  }`}
+                                >
+                                  <span className="block break-all text-sm font-medium text-zinc-950 dark:text-zinc-50">
+                                    {song.filename}
+                                  </span>
+                                  {song.artist || song.album ? (
+                                    <span className="mt-0.5 block truncate text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                                      {[song.artist, song.album]
+                                        .filter(Boolean)
+                                        .join(" - ")}
+                                    </span>
+                                  ) : null}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                        {matchingSongs.length > visibleSongMatches.length ? (
+                          <p className="border-t border-zinc-200 px-3 py-2 text-xs font-normal text-zinc-500 dark:border-zinc-800 dark:text-zinc-400">
+                            Showing first {visibleSongMatches.length} of{" "}
+                            {matchingSongs.length} matches. Keep typing to narrow
+                            the list.
+                          </p>
+                        ) : null}
+                      </>
+                    )}
+                  </div>
+                </div>
                 <button
-                  type="button"
-                  onClick={() => void addSelectedSong()}
-                  disabled={busy || songToAdd === ""}
-                  className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950"
+                  type="submit"
+                  disabled={
+                    busy ||
+                    availableSongs.length === 0 ||
+                    (songToAdd === "" && songSearch.trim() === "") ||
+                    (songToAdd === "" && visibleSongMatches.length === 0)
+                  }
+                  className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white disabled:opacity-50 sm:mt-6 dark:bg-zinc-50 dark:text-zinc-950"
                 >
                   Add
                 </button>
-              </div>
+              </form>
 
-              <div>
-                <h2 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                  Songs
-                </h2>
-                {selected.tracks.length === 0 ? (
-                  <p className="mt-2 text-sm text-zinc-500">
-                    This setlist is empty.
-                  </p>
-                ) : (
-                  <ol className="mt-3 space-y-2">
-                    {selected.tracks.map((track, index) => {
-                      const isCurrent = playingFilename === track.filename;
-                      const isSelectedSong =
-                        selectedSongFilename === track.filename;
-                      const queueCount = queueFilenames.filter(
-                        (filename) => filename === track.filename,
-                      ).length;
-                      const isPlayingCurrent = isCurrent && isPlayerPlaying;
+              <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+                <div>
+                  <h2 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                    Songs
+                  </h2>
+                  {selected.tracks.length === 0 ? (
+                    <p className="mt-2 text-sm text-zinc-500">
+                      This setlist is empty.
+                    </p>
+                  ) : (
+                    <ol className="mt-3 space-y-2">
+                      {selected.tracks.map((track, index) => {
+                        const isCurrent = playingFilename === track.filename;
+                        const isSelectedSong =
+                          selectedSongFilename === track.filename;
+                        const queueCount = queueFilenames.filter(
+                          (filename) => filename === track.filename,
+                        ).length;
+                        const isPlayingCurrent = isCurrent && isPlayerPlaying;
 
-                      return (
-                        <li
-                          key={track.id}
-                          className={`flex items-center gap-3 rounded-md border text-sm ${
-                            isCurrent
-                              ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/30 dark:ring-emerald-900"
-                              : isSelectedSong
-                                ? "border-sky-300 bg-sky-50 ring-2 ring-sky-200 dark:border-sky-800 dark:bg-sky-950/30 dark:ring-sky-900"
-                                : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
-                          }`}
-                        >
-                          <button
-                            type="button"
-                            onClick={() => selectSong(track.filename)}
-                            className="flex min-w-0 flex-1 items-center gap-3 rounded-l-md px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                        return (
+                          <li
+                            key={track.id}
+                            className={`flex items-center gap-3 rounded-md border text-sm ${
+                              isCurrent
+                                ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/30 dark:ring-emerald-900"
+                                : isSelectedSong
+                                  ? "border-sky-300 bg-sky-50 ring-2 ring-sky-200 dark:border-sky-800 dark:bg-sky-950/30 dark:ring-sky-900"
+                                  : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
+                            }`}
                           >
-                            <span className="w-6 shrink-0 text-right text-zinc-500">
-                              {index + 1}.
-                            </span>
-                            <span className="min-w-0 flex-1">
-                              <span className="block break-all text-zinc-900 dark:text-zinc-100">
-                                {track.filename}
-                              </span>
-                              {isSelectedSong ? (
-                                <span className="mt-0.5 block text-xs text-sky-700 dark:text-sky-300">
-                                  Selected. Choose an action.
-                                </span>
-                              ) : queueCount > 0 ? (
-                                <span className="mt-0.5 block text-xs text-amber-700 dark:text-amber-300">
-                                  In queue {queueCount} time
-                                  {queueCount === 1 ? "" : "s"}
-                                </span>
-                              ) : null}
-                            </span>
-                            {isCurrent ? (
-                              <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-emerald-500 dark:text-emerald-950">
-                                {isPlayerPlaying ? "Now playing" : "In player"}
-                              </span>
-                            ) : queueCount > 0 ? (
-                              <span className="shrink-0 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white dark:bg-amber-400 dark:text-amber-950">
-                                Queued
-                              </span>
-                            ) : null}
-                          </button>
-                          {isSelectedSong ? (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => addToQueue(track.filename)}
-                                className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:bg-zinc-950 dark:text-sky-300 dark:hover:bg-sky-950/40"
-                              >
-                                <PlusIcon className="size-3.5" />
-                                Add to queue
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => togglePlayback(track.filename)}
-                                aria-label={
-                                  isPlayingCurrent ? "Pause" : "Play now"
-                                }
-                                title={isPlayingCurrent ? "Pause" : "Play now"}
-                                className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
-                              >
-                                {isPlayingCurrent ? (
-                                  <PauseIcon className="size-4" />
-                                ) : (
-                                  <PlayIcon className="size-4" />
-                                )}
-                              </button>
-                            </>
-                          ) : null}
-                          {isCurrent && !isPlayerVisible ? (
                             <button
                               type="button"
-                              onClick={() => setIsPlayerVisible(true)}
-                              className="shrink-0 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                              onClick={() => selectSong(track.filename)}
+                              className="flex min-w-0 flex-1 items-center gap-3 rounded-l-md px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
                             >
-                              Show player
+                              <span className="w-6 shrink-0 text-right text-zinc-500">
+                                {index + 1}.
+                              </span>
+                              <span className="min-w-0 flex-1">
+                                <span className="block break-all text-zinc-900 dark:text-zinc-100">
+                                  {track.filename}
+                                </span>
+                                {isSelectedSong ? (
+                                  <span className="mt-0.5 block text-xs text-sky-700 dark:text-sky-300">
+                                    Selected. Edit notes in the side panel.
+                                  </span>
+                                ) : queueCount > 0 ? (
+                                  <span className="mt-0.5 block text-xs text-amber-700 dark:text-amber-300">
+                                    In queue {queueCount} time
+                                    {queueCount === 1 ? "" : "s"}
+                                  </span>
+                                ) : track.notes ? (
+                                  <span className="mt-0.5 block text-xs text-zinc-500 dark:text-zinc-400">
+                                    Has setlist notes
+                                  </span>
+                                ) : null}
+                              </span>
+                              {isCurrent ? (
+                                <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-emerald-500 dark:text-emerald-950">
+                                  {isPlayerPlaying ? "Now playing" : "In player"}
+                                </span>
+                              ) : queueCount > 0 ? (
+                                <span className="shrink-0 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white dark:bg-amber-400 dark:text-amber-950">
+                                  Queued
+                                </span>
+                              ) : null}
                             </button>
-                          ) : null}
-                          <button
-                            type="button"
-                            onClick={() => void removeSong(track.filename)}
-                            disabled={busy}
-                            className="mr-3 shrink-0 rounded-md px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
-                          >
-                            Remove
-                          </button>
-                        </li>
-                      );
-                    })}
-                  </ol>
-                )}
+                            {isSelectedSong ? (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => addToQueue(track.filename)}
+                                  className="inline-flex shrink-0 items-center gap-1.5 rounded-md border border-sky-300 bg-white px-3 py-1.5 text-xs font-semibold text-sky-800 hover:bg-sky-50 dark:border-sky-800 dark:bg-zinc-950 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                                >
+                                  <PlusIcon className="size-3.5" />
+                                  Add to queue
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => togglePlayback(track.filename)}
+                                  aria-label={
+                                    isPlayingCurrent ? "Pause" : "Play now"
+                                  }
+                                  title={isPlayingCurrent ? "Pause" : "Play now"}
+                                  className="inline-flex size-8 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                                >
+                                  {isPlayingCurrent ? (
+                                    <PauseIcon className="size-4" />
+                                  ) : (
+                                    <PlayIcon className="size-4" />
+                                  )}
+                                </button>
+                              </>
+                            ) : null}
+                            {isCurrent && !isPlayerVisible ? (
+                              <button
+                                type="button"
+                                onClick={() => setIsPlayerVisible(true)}
+                                className="shrink-0 rounded-md border border-emerald-300 bg-white px-3 py-1.5 text-xs font-semibold text-emerald-800 hover:bg-emerald-50 dark:border-emerald-800 dark:bg-zinc-950 dark:text-emerald-300 dark:hover:bg-emerald-950/40"
+                              >
+                                Show player
+                              </button>
+                            ) : null}
+                            <button
+                              type="button"
+                              onClick={() => void removeSong(track.filename)}
+                              disabled={busy}
+                              className="mr-3 shrink-0 rounded-md px-2 py-1 text-xs font-medium text-red-700 hover:bg-red-50 disabled:opacity-50 dark:text-red-300 dark:hover:bg-red-950/40"
+                            >
+                              Remove
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ol>
+                  )}
+                </div>
+
+                <aside className="rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
+                  <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                    Song notes
+                  </p>
+                  {selectedTrack ? (
+                    <form
+                      className="mt-3 space-y-3"
+                      onSubmit={(event) => {
+                        event.preventDefault();
+                        void saveSelectedSongNotes();
+                      }}
+                    >
+                      <div>
+                        <p className="break-all text-sm font-semibold text-zinc-950 dark:text-zinc-50">
+                          {selectedTrack.filename}
+                        </p>
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          These notes only apply to this song in this setlist.
+                        </p>
+                      </div>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        Notes
+                        <textarea
+                          value={notesDraft}
+                          onChange={(event) => setNotesDraft(event.target.value)}
+                          disabled={busy}
+                          maxLength={5000}
+                          rows={12}
+                          placeholder="Add cues, key changes, transitions, or other notes for this setlist."
+                          className="mt-1 block min-h-64 w-full resize-y rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-zinc-500 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                        />
+                      </label>
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs text-zinc-500">
+                          {notesDraft.length}/5000
+                        </span>
+                        <button
+                          type="submit"
+                          disabled={busy || notesDraft.length > 5000}
+                          className="rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950"
+                        >
+                          Save notes
+                        </button>
+                      </div>
+                    </form>
+                  ) : (
+                    <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
+                      Select a song to view and edit its setlist-specific notes.
+                    </p>
+                  )}
+                </aside>
               </div>
             </div>
           )}
