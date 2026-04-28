@@ -1,12 +1,35 @@
 import { and, asc, inArray, isNotNull, sql } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { getDb } from "@/db/client";
-import { tracks } from "@/db/schema";
+import { artistSetlistPreferences, tracks } from "@/db/schema";
 import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
 import { mergedArtistForFilename } from "@/lib/mergedArtistForFilename";
 import { listMusicLibraryMp3Names } from "@/lib/musicLibraryIndex";
 
 export const dynamic = "force-dynamic";
+
+function artistNameFromBody(body: unknown): string | null {
+  if (typeof body !== "object" || body === null || !("artist" in body)) {
+    return null;
+  }
+  const artist = (body as { artist: unknown }).artist;
+  if (typeof artist !== "string") return null;
+  const trimmed = artist.trim();
+  return trimmed.length > 0 && trimmed.length <= 200 ? trimmed : null;
+}
+
+function excludedFromSetlistsFromBody(body: unknown): boolean | null {
+  if (
+    typeof body !== "object" ||
+    body === null ||
+    !("excludedFromSetlists" in body)
+  ) {
+    return null;
+  }
+  const value = (body as { excludedFromSetlists: unknown })
+    .excludedFromSetlists;
+  return typeof value === "boolean" ? value : null;
+}
 
 export async function GET() {
   try {
@@ -65,7 +88,60 @@ export async function GET() {
     if (hasUnknownArtistSong) pushUnique("Unknown");
     merged.sort((a, b) => a.localeCompare(b));
 
-    return NextResponse.json({ artists: merged });
+    const preferenceRows = db.select().from(artistSetlistPreferences).all();
+    const preferencesByArtist = new Map(
+      preferenceRows.map((row) => [row.artistName, row.excludedFromSetlists]),
+    );
+    const artistDetails = merged.map((name) => ({
+      name,
+      excludedFromSetlists: preferencesByArtist.get(name) ?? false,
+    }));
+
+    return NextResponse.json({ artists: artistDetails });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const artist = artistNameFromBody(body);
+  if (!artist) {
+    return NextResponse.json({ error: "Artist is required" }, { status: 400 });
+  }
+
+  const excludedFromSetlists = excludedFromSetlistsFromBody(body);
+  if (excludedFromSetlists === null) {
+    return NextResponse.json(
+      { error: "excludedFromSetlists must be a boolean" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    getDb()
+      .insert(artistSetlistPreferences)
+      .values({
+        artistName: artist,
+        excludedFromSetlists,
+        updatedAt: Date.now(),
+      })
+      .onConflictDoUpdate({
+        target: artistSetlistPreferences.artistName,
+        set: {
+          excludedFromSetlists,
+          updatedAt: Date.now(),
+        },
+      })
+      .run();
+    return NextResponse.json({ artist, excludedFromSetlists });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     return NextResponse.json({ error: message }, { status: 500 });

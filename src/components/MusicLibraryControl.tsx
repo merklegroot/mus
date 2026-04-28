@@ -12,6 +12,8 @@ type SongRow = {
   artist: string | null;
   title: string | null;
   album: string | null;
+  excludedFromSetlists: boolean;
+  artistExcludedFromSetlists: boolean;
 };
 
 type MusicLibraryControlState =
@@ -58,7 +60,20 @@ function parseSongsResponse(data: unknown):
             : typeof rawTitle === "string" && rawTitle.trim() !== ""
               ? rawTitle.trim()
               : null;
-        songs.push({ filename, artist, title, album });
+        const excludedFromSetlists =
+          (item as { excludedFromSetlists?: unknown }).excludedFromSetlists ===
+          true;
+        const artistExcludedFromSetlists =
+          (item as { artistExcludedFromSetlists?: unknown })
+            .artistExcludedFromSetlists === true;
+        songs.push({
+          filename,
+          artist,
+          title,
+          album,
+          excludedFromSetlists,
+          artistExcludedFromSetlists,
+        });
       }
     }
     return { ok: true, songs };
@@ -73,6 +88,8 @@ function parseSongsResponse(data: unknown):
         artist: null,
         title: null,
         album: null,
+        excludedFromSetlists: false,
+        artistExcludedFromSetlists: false,
       })),
     };
   }
@@ -136,6 +153,8 @@ type Mp3Details = {
   durationSec: number | null;
   bitrateKbps: number | null;
   codec: string | null;
+  excludedFromSetlists: boolean;
+  artistExcludedFromSetlists: boolean;
 };
 
 type DetailState =
@@ -189,6 +208,8 @@ export function MusicLibraryControl() {
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [visibilityBusy, setVisibilityBusy] = useState(false);
+  const [visibilityError, setVisibilityError] = useState<string | null>(null);
 
   async function refreshSongs(): Promise<void> {
     const res = await fetch("/api/mp3s");
@@ -288,7 +309,68 @@ export function MusicLibraryControl() {
     setDeleteConfirm(false);
     setDeleteError(null);
     setDeleteBusy(false);
+    setVisibilityBusy(false);
+    setVisibilityError(null);
   }, [selected]);
+
+  async function setSelectedSetlistVisibility(
+    excludedFromSetlists: boolean,
+  ): Promise<void> {
+    if (!selected) return;
+    setVisibilityBusy(true);
+    setVisibilityError(null);
+    try {
+      const res = await fetch(`/api/mp3s/${encodeURIComponent(selected)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ excludedFromSetlists }),
+      });
+      const data: unknown = await res.json();
+      if (!res.ok) {
+        const message =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : res.statusText;
+        setVisibilityError(message);
+        return;
+      }
+
+      const next =
+        typeof data === "object" &&
+        data !== null &&
+        typeof (data as { excludedFromSetlists?: unknown })
+          .excludedFromSetlists === "boolean"
+          ? (data as { excludedFromSetlists: boolean }).excludedFromSetlists
+          : excludedFromSetlists;
+      setDetail((prev) =>
+        prev?.status === "ready"
+          ? {
+              status: "ready",
+              data: { ...prev.data, excludedFromSetlists: next },
+            }
+          : prev,
+      );
+      setState((prev) =>
+        prev.status === "ready"
+          ? {
+              status: "ready",
+              songs: prev.songs.map((song) =>
+                song.filename === selected
+                  ? { ...song, excludedFromSetlists: next }
+                  : song,
+              ),
+            }
+          : prev,
+      );
+    } catch (err) {
+      setVisibilityError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setVisibilityBusy(false);
+    }
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -386,6 +468,46 @@ export function MusicLibraryControl() {
             setFilterArtist((prev) => (prev === artist ? null : artist));
           }}
           onClearArtistFilter={() => setFilterArtist(null)}
+          onArtistSetlistVisibilityChanged={(artist, excludedFromSetlists) => {
+            setState((prev) =>
+              prev.status === "ready"
+                ? {
+                    status: "ready",
+                    songs: prev.songs.map((song) =>
+                      songMatchesArtistFilter(song, artist)
+                        ? {
+                            ...song,
+                            artistExcludedFromSetlists: excludedFromSetlists,
+                          }
+                        : song,
+                    ),
+                  }
+                : prev,
+            );
+            setDetail((prev) =>
+              prev?.status === "ready" &&
+              songMatchesArtistFilter(
+                {
+                  filename: prev.data.filename,
+                  artist: prev.data.artist,
+                  title: prev.data.title,
+                  album: prev.data.album,
+                  excludedFromSetlists: prev.data.excludedFromSetlists,
+                  artistExcludedFromSetlists:
+                    prev.data.artistExcludedFromSetlists,
+                },
+                artist,
+              )
+                ? {
+                    status: "ready",
+                    data: {
+                      ...prev.data,
+                      artistExcludedFromSetlists: excludedFromSetlists,
+                    },
+                  }
+                : prev,
+            );
+          }}
         />
       </div>
 
@@ -499,6 +621,14 @@ export function MusicLibraryControl() {
                             {display.filename}
                           </span>
                         )}
+                        {row.excludedFromSetlists ||
+                        row.artistExcludedFromSetlists ? (
+                          <span className="mt-0.5 block text-xs font-normal text-amber-700 dark:text-amber-300">
+                            {row.artistExcludedFromSetlists
+                              ? "Artist hidden from setlists"
+                              : "Hidden from setlists"}
+                          </span>
+                        ) : null}
                       </button>
                     </li>
                   ))}
@@ -569,19 +699,44 @@ export function MusicLibraryControl() {
                 }}
                 actions={
                   deleteConfirm ? null : (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setDeleteConfirm(true);
-                        setDeleteError(null);
-                      }}
-                      className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
-                    >
-                      Delete file…
-                    </button>
+                    <>
+                      {detail?.status === "ready" ? (
+                        <button
+                          type="button"
+                          disabled={visibilityBusy}
+                          onClick={() =>
+                            void setSelectedSetlistVisibility(
+                              !detail.data.excludedFromSetlists,
+                            )
+                          }
+                          className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                        >
+                          {visibilityBusy
+                            ? "Saving…"
+                            : detail.data.excludedFromSetlists
+                              ? "Show in setlists"
+                              : "Hide from setlists"}
+                        </button>
+                      ) : null}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDeleteConfirm(true);
+                          setDeleteError(null);
+                        }}
+                        className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
+                      >
+                        Delete file…
+                      </button>
+                    </>
                   )
                 }
               />
+              {visibilityError ? (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                  {visibilityError}
+                </p>
+              ) : null}
               {deleteConfirm ? (
                 <div className="mt-2 flex flex-col gap-2">
                   <p className="break-all text-xs text-red-950 dark:text-red-100">
@@ -691,6 +846,16 @@ export function MusicLibraryControl() {
                       }
                     />
                     <DetailRow label="Album" value={detail.data.album} />
+                    <DetailRow
+                      label="Setlists"
+                      value={
+                        detail.data.artistExcludedFromSetlists
+                          ? "Hidden by artist setting"
+                          : detail.data.excludedFromSetlists
+                          ? "Hidden from add picker"
+                          : "Visible in add picker"
+                      }
+                    />
                   </dl>
                   <details className="mt-3">
                     <summary className="cursor-pointer text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100">

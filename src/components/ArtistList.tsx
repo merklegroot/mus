@@ -12,32 +12,68 @@ type DiscogsFetchState =
 type ArtistListState =
   | { status: "loading" }
   | { status: "error"; message: string }
-  | { status: "ready"; artists: string[] };
+  | { status: "ready"; artists: ArtistRow[] };
 
-function parseArtistsResponse(data: unknown): string[] | null {
+type ArtistRow = {
+  name: string;
+  excludedFromSetlists: boolean;
+};
+
+function parseArtistsResponse(data: unknown): ArtistRow[] | null {
   if (typeof data !== "object" || data === null || !("artists" in data)) {
     return null;
   }
   const raw = (data as { artists: unknown }).artists;
   if (!Array.isArray(raw)) return null;
-  return raw.filter((a): a is string => typeof a === "string");
+  const artists: ArtistRow[] = [];
+  for (const item of raw) {
+    if (typeof item === "string") {
+      artists.push({ name: item, excludedFromSetlists: false });
+      continue;
+    }
+    if (
+      typeof item === "object" &&
+      item !== null &&
+      typeof (item as { name: unknown }).name === "string"
+    ) {
+      artists.push({
+        name: (item as { name: string }).name,
+        excludedFromSetlists:
+          (item as { excludedFromSetlists?: unknown }).excludedFromSetlists ===
+          true,
+      });
+    }
+  }
+  return artists;
 }
 
 export function ArtistList({
   selectedArtist,
   onArtistClick,
   onClearArtistFilter,
+  onArtistSetlistVisibilityChanged,
   reloadToken,
   showDiscogsActions = true,
 }: {
   selectedArtist: string | null;
   onArtistClick: (artist: string) => void;
   onClearArtistFilter: () => void;
+  onArtistSetlistVisibilityChanged?: (
+    artist: string,
+    excludedFromSetlists: boolean,
+  ) => void;
   reloadToken?: number;
   showDiscogsActions?: boolean;
 }) {
   const [state, setState] = useState<ArtistListState>({ status: "loading" });
   const [discogs, setDiscogs] = useState<DiscogsFetchState>({ status: "idle" });
+  const [setlistBusy, setSetlistBusy] = useState(false);
+  const [setlistError, setSetlistError] = useState<string | null>(null);
+
+  const selectedArtistRow =
+    state.status === "ready" && selectedArtist
+      ? state.artists.find((artist) => artist.name === selectedArtist) ?? null
+      : null;
 
   useEffect(() => {
     let cancelled = false;
@@ -80,6 +116,62 @@ export function ArtistList({
       cancelled = true;
     };
   }, [reloadToken]);
+
+  useEffect(() => {
+    setSetlistBusy(false);
+    setSetlistError(null);
+  }, [selectedArtist]);
+
+  async function setArtistSetlistVisibility(
+    artist: string,
+    excludedFromSetlists: boolean,
+  ): Promise<void> {
+    setSetlistBusy(true);
+    setSetlistError(null);
+    try {
+      const res = await fetch("/api/artists", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ artist, excludedFromSetlists }),
+      });
+      const data: unknown = await res.json();
+      if (!res.ok) {
+        const message =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : res.statusText;
+        setSetlistError(message);
+        return;
+      }
+      const next =
+        typeof data === "object" &&
+        data !== null &&
+        typeof (data as { excludedFromSetlists?: unknown })
+          .excludedFromSetlists === "boolean"
+          ? (data as { excludedFromSetlists: boolean }).excludedFromSetlists
+          : excludedFromSetlists;
+      setState((prev) =>
+        prev.status === "ready"
+          ? {
+              status: "ready",
+              artists: prev.artists.map((row) =>
+                row.name === artist
+                  ? { ...row, excludedFromSetlists: next }
+                  : row,
+              ),
+            }
+          : prev,
+      );
+      onArtistSetlistVisibilityChanged?.(artist, next);
+    } catch (err) {
+      setSetlistError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setSetlistBusy(false);
+    }
+  }
 
   const panelClass =
     "flex h-full min-h-0 w-full min-w-0 flex-col rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
@@ -156,6 +248,25 @@ export function ArtistList({
                 {discogs.status === "loading" ? "Discogs…" : "Discogs"}
               </button>
             ) : null}
+            {selectedArtistRow ? (
+              <button
+                type="button"
+                disabled={setlistBusy}
+                onClick={() =>
+                  void setArtistSetlistVisibility(
+                    selectedArtistRow.name,
+                    !selectedArtistRow.excludedFromSetlists,
+                  )
+                }
+                className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 disabled:cursor-not-allowed disabled:opacity-50 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              >
+                {setlistBusy
+                  ? "Saving…"
+                  : selectedArtistRow.excludedFromSetlists
+                    ? "Show in setlists"
+                    : "Hide from setlists"}
+              </button>
+            ) : null}
             <button
               type="button"
               onClick={() => {
@@ -183,6 +294,11 @@ export function ArtistList({
           {discogs.message}
         </p>
       ) : null}
+      {selectedArtist && setlistError ? (
+        <p className="mb-2 shrink-0 text-xs text-red-600 dark:text-red-400">
+          {setlistError}
+        </p>
+      ) : null}
       {state.status === "loading" ? (
         <p className="text-sm text-zinc-500">Loading…</p>
       ) : state.status === "error" ? (
@@ -195,27 +311,32 @@ export function ArtistList({
         </p>
       ) : (
         <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm text-zinc-800 dark:text-zinc-200">
-          {state.artists.map((name) => (
+          {state.artists.map((artist) => (
             <li
-              key={name}
+              key={artist.name}
               className="flex min-w-0 items-stretch gap-1 break-words py-0.5 pr-1"
             >
               <button
                 type="button"
                 onClick={() => {
                   setDiscogs({ status: "idle" });
-                  onArtistClick(name);
+                  onArtistClick(artist.name);
                 }}
                 className={`min-w-0 flex-1 rounded-md px-2 py-1.5 text-left transition-colors ${
-                  selectedArtist === name
+                  selectedArtist === artist.name
                     ? "bg-zinc-200 font-medium text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
                     : "text-zinc-800 hover:bg-zinc-100 dark:text-zinc-200 dark:hover:bg-zinc-800/60"
                 }`}
               >
-                {name}
+                <span className="block">{artist.name}</span>
+                {artist.excludedFromSetlists ? (
+                  <span className="mt-0.5 block text-xs font-normal text-amber-700 dark:text-amber-300">
+                    Hidden from setlists
+                  </span>
+                ) : null}
               </button>
               <Link
-                href={`/artist/${encodeURIComponent(name)}`}
+                href={`/artist/${encodeURIComponent(artist.name)}`}
                 className="shrink-0 self-center rounded-md px-2 py-1.5 text-xs font-medium text-zinc-600 underline-offset-2 hover:bg-zinc-100 hover:underline dark:text-zinc-400 dark:hover:bg-zinc-800/60"
               >
                 Page

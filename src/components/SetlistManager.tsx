@@ -26,6 +26,8 @@ type SongRow = {
   filename: string;
   artist: string | null;
   album: string | null;
+  excludedFromSetlists?: boolean;
+  artistExcludedFromSetlists?: boolean;
 };
 
 function PlayIcon({ className }: { className?: string }) {
@@ -279,7 +281,13 @@ export function SetlistManager() {
   );
 
   const availableSongs = useMemo(
-    () => songs.filter((song) => !selectedFilenames.has(song.filename)),
+    () =>
+      songs.filter(
+        (song) =>
+          !song.excludedFromSetlists &&
+          !song.artistExcludedFromSetlists &&
+          !selectedFilenames.has(song.filename),
+      ),
     [songs, selectedFilenames],
   );
 

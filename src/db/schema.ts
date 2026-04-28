@@ -33,11 +33,28 @@ export const tracks = sqliteTable("tracks", {
   durationSec: real("duration_sec"),
   bitrateKbps: integer("bitrate_kbps"),
   codec: text("codec"),
+  excludedFromSetlists: integer("excluded_from_setlists", {
+    mode: "boolean",
+  }).notNull().default(false),
   updatedAt: integer("updated_at", { mode: "number" }).notNull(),
 });
 
 export type Track = typeof tracks.$inferSelect;
 export type NewTrack = typeof tracks.$inferInsert;
+
+/** User-managed artist preferences that are not written to ID3 tags. */
+export const artistSetlistPreferences = sqliteTable("artist_setlist_preferences", {
+  artistName: text("artist_name").primaryKey(),
+  excludedFromSetlists: integer("excluded_from_setlists", {
+    mode: "boolean",
+  }).notNull().default(false),
+  updatedAt: integer("updated_at", { mode: "number" }).notNull(),
+});
+
+export type ArtistSetlistPreference =
+  typeof artistSetlistPreferences.$inferSelect;
+export type NewArtistSetlistPreference =
+  typeof artistSetlistPreferences.$inferInsert;
 
 /**
  * Cached Discogs artist payload for a library artist name (from tags / filename inference).

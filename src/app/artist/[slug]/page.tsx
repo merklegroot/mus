@@ -4,10 +4,12 @@ import { notFound } from "next/navigation";
 import { eq, inArray } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import {
+  artistSetlistPreferences,
   discogsArtistReleases,
   discogsArtists,
   discogsReleaseTracklists,
 } from "@/db/schema";
+import { ArtistSetlistVisibilityToggle } from "@/components/ArtistSetlistVisibilityToggle";
 import { DiscogsFetchControl } from "@/components/DiscogsFetchControl";
 import { DiscogsReleasesFetchControl } from "@/components/DiscogsReleasesFetchControl";
 import { DiscogsTracklistFetchControl } from "@/components/DiscogsTracklistFetchControl";
@@ -90,6 +92,13 @@ export default async function ArtistDetailPage({
         .where(eq(discogsArtistReleases.libraryArtistName, libraryArtistName))
         .get()
     : undefined;
+  const setlistPreference = db
+    .select({
+      excludedFromSetlists: artistSetlistPreferences.excludedFromSetlists,
+    })
+    .from(artistSetlistPreferences)
+    .where(eq(artistSetlistPreferences.artistName, libraryArtistName))
+    .get();
 
   const panel =
     "w-full rounded-lg border border-zinc-200 bg-zinc-50/80 p-6 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
@@ -113,6 +122,12 @@ export default async function ArtistDetailPage({
           <h1 className="mt-1 text-2xl font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
             {libraryArtistName}
           </h1>
+          <ArtistSetlistVisibilityToggle
+            artist={libraryArtistName}
+            initialExcludedFromSetlists={
+              setlistPreference?.excludedFromSetlists ?? false
+            }
+          />
         </header>
 
         {!row ? (

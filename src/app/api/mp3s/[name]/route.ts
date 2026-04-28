@@ -3,8 +3,8 @@ import { unlink } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { parseFile } from "music-metadata";
-import { getDb } from "@/db/client";
-import { tracks } from "@/db/schema";
+import { getDb, getSqliteDatabase } from "@/db/client";
+import { artistSetlistPreferences, tracks } from "@/db/schema";
 import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
 import { touchLibraryIndexStamp } from "@/lib/musicLibraryIndex";
 import { deleteSetlistTracksForFilename } from "@/lib/setlists";
@@ -124,6 +124,12 @@ function fileFingerprint(stats: Stats) {
   };
 }
 
+function booleanFieldFromBody(body: unknown, key: string): boolean | null {
+  if (typeof body !== "object" || body === null || !(key in body)) return null;
+  const value = (body as Record<string, unknown>)[key];
+  return typeof value === "boolean" ? value : null;
+}
+
 function hasAnyCachedTags(row: {
   title: string | null;
   artist: string | null;
@@ -169,6 +175,61 @@ function readCachedDetails(filename: string, stats: Stats) {
   } catch {
     return null;
   }
+}
+
+function readTrackExcludedFromSetlists(filename: string): boolean {
+  try {
+    const row = getDb()
+      .select({ excludedFromSetlists: tracks.excludedFromSetlists })
+      .from(tracks)
+      .where(eq(tracks.filename, filename))
+      .get();
+    return row?.excludedFromSetlists ?? false;
+  } catch {
+    return false;
+  }
+}
+
+function readArtistExcludedFromSetlists(artist: string | null): boolean {
+  try {
+    const row = getDb()
+      .select({
+        excludedFromSetlists: artistSetlistPreferences.excludedFromSetlists,
+      })
+      .from(artistSetlistPreferences)
+      .where(eq(artistSetlistPreferences.artistName, artist ?? "Unknown"))
+      .get();
+    return row?.excludedFromSetlists ?? false;
+  } catch {
+    return false;
+  }
+}
+
+function persistTrackSetlistVisibility(
+  filename: string,
+  stats: Stats,
+  excludedFromSetlists: boolean,
+) {
+  const { size, mtimeMs } = fileFingerprint(stats);
+  getSqliteDatabase()
+    .prepare(
+      `
+        INSERT INTO tracks (
+          filename,
+          size_bytes,
+          mtime_ms,
+          excluded_from_setlists,
+          updated_at
+        )
+        VALUES (?, ?, ?, ?, ?)
+        ON CONFLICT(filename) DO UPDATE SET
+          size_bytes = excluded.size_bytes,
+          mtime_ms = excluded.mtime_ms,
+          excluded_from_setlists = excluded.excluded_from_setlists,
+          updated_at = excluded.updated_at
+      `,
+    )
+    .run(filename, size, mtimeMs, excludedFromSetlists ? 1 : 0, Date.now());
 }
 
 function persistTrackDetails(
@@ -244,6 +305,8 @@ function jsonFromRow(
     durationSec: number | null;
     bitrateKbps: number | null;
     codec: string | null;
+    excludedFromSetlists: boolean;
+    artistExcludedFromSetlists: boolean;
   },
 ) {
   return {
@@ -264,6 +327,8 @@ function jsonFromRow(
     durationSec: row.durationSec,
     bitrateKbps: row.bitrateKbps,
     codec: row.codec,
+    excludedFromSetlists: row.excludedFromSetlists,
+    artistExcludedFromSetlists: row.artistExcludedFromSetlists,
   };
 }
 
@@ -305,6 +370,8 @@ export async function GET(
     const id3Artist = cached.artist;
     const mergedTitle = id3Title ?? inferred.primary.title;
     const mergedArtist = id3Artist ?? inferred.primary.artist;
+    const artistExcludedFromSetlists =
+      readArtistExcludedFromSetlists(mergedArtist);
     return NextResponse.json(
       jsonFromRow(
         segment,
@@ -319,6 +386,8 @@ export async function GET(
           titleSource: id3Title ? "id3" : mergedTitle ? "filename" : "none",
           artist: mergedArtist,
           artistSource: id3Artist ? "id3" : mergedArtist ? "filename" : "none",
+          excludedFromSetlists: cached.excludedFromSetlists,
+          artistExcludedFromSetlists,
         },
       ),
     );
@@ -384,6 +453,9 @@ export async function GET(
   };
 
   persistTrackDetails(segment, stats, fields);
+  const excludedFromSetlists = readTrackExcludedFromSetlists(segment);
+  const artistExcludedFromSetlists =
+    readArtistExcludedFromSetlists(mergedArtist);
 
   return NextResponse.json(
     jsonFromRow(
@@ -399,9 +471,57 @@ export async function GET(
         titleSource,
         artist: mergedArtist,
         artistSource,
+        excludedFromSetlists,
+        artistExcludedFromSetlists,
       },
     ),
   );
+}
+
+export async function PATCH(
+  request: Request,
+  context: { params: Promise<{ name: string }> },
+) {
+  const { name } = await context.params;
+  const resolved = await resolveMusicMp3(name);
+
+  if (!resolved.ok) {
+    return NextResponse.json(
+      { error: resolved.error },
+      { status: resolved.status },
+    );
+  }
+
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const excludedFromSetlists = booleanFieldFromBody(
+    body,
+    "excludedFromSetlists",
+  );
+  if (excludedFromSetlists === null) {
+    return NextResponse.json(
+      { error: "excludedFromSetlists must be a boolean" },
+      { status: 400 },
+    );
+  }
+
+  try {
+    persistTrackSetlistVisibility(
+      resolved.segment,
+      resolved.stats,
+      excludedFromSetlists,
+    );
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    return NextResponse.json({ error: message }, { status: 500 });
+  }
+
+  return NextResponse.json({ ok: true, excludedFromSetlists });
 }
 
 export async function DELETE(
