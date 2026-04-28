@@ -166,6 +166,10 @@ export function SetlistManager() {
   const [draggedTrackFilename, setDraggedTrackFilename] = useState<string | null>(
     null,
   );
+  const [dropTarget, setDropTarget] = useState<{
+    filename: string;
+    placement: "before" | "after";
+  } | null>(null);
   const [selectedSongFilename, setSelectedSongFilename] = useState<string | null>(
     null,
   );
@@ -575,26 +579,38 @@ export function SetlistManager() {
   async function reorderSelectedTracks(
     draggedFilename: string,
     targetFilename: string,
+    placement: "before" | "after",
   ) {
     if (!selected || draggedFilename === targetFilename) return;
 
-    const fromIndex = selected.tracks.findIndex(
+    const moved = selected.tracks.find(
       (track) => track.filename === draggedFilename,
     );
-    const toIndex = selected.tracks.findIndex(
+    if (!moved) return;
+
+    const remainingTracks = selected.tracks.filter(
+      (track) => track.filename !== draggedFilename,
+    );
+    const targetIndex = remainingTracks.findIndex(
       (track) => track.filename === targetFilename,
     );
-    if (fromIndex < 0 || toIndex < 0) return;
+    if (targetIndex < 0) return;
 
     const previous = selected;
-    const nextTracks = [...selected.tracks];
-    const [moved] = nextTracks.splice(fromIndex, 1);
-    if (!moved) return;
-    nextTracks.splice(toIndex, 0, moved);
+    const nextTracks = [...remainingTracks];
+    nextTracks.splice(placement === "after" ? targetIndex + 1 : targetIndex, 0, moved);
     const reorderedTracks = nextTracks.map((track, index) => ({
       ...track,
       position: index,
     }));
+
+    if (
+      reorderedTracks.every(
+        (track, index) => track.filename === selected.tracks[index]?.filename,
+      )
+    ) {
+      return;
+    }
 
     setSelected({ ...selected, tracks: reorderedTracks });
     setBusy(true);
@@ -624,6 +640,18 @@ export function SetlistManager() {
     } finally {
       setBusy(false);
     }
+  }
+
+  function moveTrackByOne(filename: string, direction: -1 | 1) {
+    if (!selected) return;
+    const index = selected.tracks.findIndex((track) => track.filename === filename);
+    const target = selected.tracks[index + direction];
+    if (!target) return;
+    void reorderSelectedTracks(
+      filename,
+      target.filename,
+      direction === -1 ? "before" : "after",
+    );
   }
 
   const panelClass =
@@ -889,9 +917,19 @@ export function SetlistManager() {
 
               <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
                 <div>
-                  <h2 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
-                    Songs
-                  </h2>
+                  <div className="flex flex-wrap items-end justify-between gap-2">
+                    <div>
+                      <h2 className="text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50">
+                        Songs
+                      </h2>
+                      {selected.tracks.length > 1 ? (
+                        <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
+                          Drag a handle to a highlighted drop line, or use the
+                          arrows to move a song one spot.
+                        </p>
+                      ) : null}
+                    </div>
+                  </div>
                   {selected.tracks.length === 0 ? (
                     <p className="mt-2 text-sm text-zinc-500">
                       This setlist is empty.
@@ -906,13 +944,44 @@ export function SetlistManager() {
                           (filename) => filename === track.filename,
                         ).length;
                         const isPlayingCurrent = isCurrent && isPlayerPlaying;
+                        const dropPlacement =
+                          dropTarget?.filename === track.filename
+                            ? dropTarget.placement
+                            : null;
 
                         return (
                           <li
                             key={track.id}
                             onDragOver={(event) => {
-                              if (!draggedTrackFilename) return;
+                              if (
+                                !draggedTrackFilename ||
+                                draggedTrackFilename === track.filename
+                              ) {
+                                return;
+                              }
                               event.preventDefault();
+                              const rect =
+                                event.currentTarget.getBoundingClientRect();
+                              const placement =
+                                event.clientY < rect.top + rect.height / 2
+                                  ? "before"
+                                  : "after";
+                              setDropTarget({
+                                filename: track.filename,
+                                placement,
+                              });
+                            }}
+                            onDragLeave={(event) => {
+                              if (
+                                event.currentTarget.contains(
+                                  event.relatedTarget as Node | null,
+                                )
+                              ) {
+                                return;
+                              }
+                              setDropTarget((prev) =>
+                                prev?.filename === track.filename ? null : prev,
+                              );
                             }}
                             onDrop={(event) => {
                               event.preventDefault();
@@ -920,15 +989,20 @@ export function SetlistManager() {
                                 event.dataTransfer.getData("text/plain") ||
                                 draggedTrackFilename;
                               setDraggedTrackFilename(null);
+                              const placement = dropPlacement ?? "after";
+                              setDropTarget(null);
                               if (!dragged) return;
                               void reorderSelectedTracks(
                                 dragged,
                                 track.filename,
+                                placement,
                               );
                             }}
-                            className={`flex items-center gap-3 rounded-md border text-sm ${
+                            className={`relative flex items-center gap-2 rounded-md border text-sm transition-colors ${
                               draggedTrackFilename === track.filename
                                 ? "border-zinc-300 bg-zinc-100 opacity-60 dark:border-zinc-700 dark:bg-zinc-900"
+                                : dropPlacement
+                                  ? "border-sky-300 bg-sky-50 dark:border-sky-800 dark:bg-sky-950/30"
                                 : isCurrent
                                 ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/30 dark:ring-emerald-900"
                                 : isSelectedSong
@@ -936,25 +1010,63 @@ export function SetlistManager() {
                                   : "border-zinc-200 bg-white dark:border-zinc-800 dark:bg-zinc-950"
                             }`}
                           >
-                            <button
-                              type="button"
-                              draggable={!busy}
-                              onDragStart={(event) => {
-                                setDraggedTrackFilename(track.filename);
-                                event.dataTransfer.effectAllowed = "move";
-                                event.dataTransfer.setData(
-                                  "text/plain",
-                                  track.filename,
-                                );
-                              }}
-                              onDragEnd={() => setDraggedTrackFilename(null)}
-                              disabled={busy}
-                              aria-label={`Drag ${track.filename} to reorder`}
-                              title="Drag to reorder"
-                              className="ml-3 shrink-0 cursor-grab rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
-                            >
-                              ⋮⋮
-                            </button>
+                            {dropPlacement ? (
+                              <span
+                                aria-hidden="true"
+                                className={`absolute left-3 right-3 h-0.5 rounded-full bg-sky-500 ${
+                                  dropPlacement === "before"
+                                    ? "-top-1"
+                                    : "-bottom-1"
+                                }`}
+                              />
+                            ) : null}
+                            <div className="ml-3 flex shrink-0 items-center gap-1">
+                              <button
+                                type="button"
+                                disabled={busy || index === 0}
+                                onClick={() => moveTrackByOne(track.filename, -1)}
+                                aria-label={`Move ${track.filename} up`}
+                                title="Move up"
+                                className="rounded-md px-1.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+                              >
+                                ↑
+                              </button>
+                              <button
+                                type="button"
+                                disabled={
+                                  busy || index === selected.tracks.length - 1
+                                }
+                                onClick={() => moveTrackByOne(track.filename, 1)}
+                                aria-label={`Move ${track.filename} down`}
+                                title="Move down"
+                                className="rounded-md px-1.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+                              >
+                                ↓
+                              </button>
+                              <button
+                                type="button"
+                                draggable={!busy}
+                                onDragStart={(event) => {
+                                  setDraggedTrackFilename(track.filename);
+                                  event.dataTransfer.effectAllowed = "move";
+                                  event.dataTransfer.setData(
+                                    "text/plain",
+                                    track.filename,
+                                  );
+                                }}
+                                onDragEnd={() => {
+                                  setDraggedTrackFilename(null);
+                                  setDropTarget(null);
+                                }}
+                                disabled={busy}
+                                aria-label={`Drag ${track.filename} to reorder`}
+                                title="Drag to reorder"
+                                className="cursor-grab rounded-md px-2 py-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
+                              >
+                                <span className="sr-only">Drag to reorder</span>
+                                <span aria-hidden="true">☰</span>
+                              </button>
+                            </div>
                             <button
                               type="button"
                               onClick={() => selectSong(track.filename)}
