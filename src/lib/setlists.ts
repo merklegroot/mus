@@ -135,7 +135,7 @@ export function listSetlists(): SetlistSummary[] {
       FROM setlists p
       LEFT JOIN setlist_tracks pt ON pt.setlist_id = p.id
       GROUP BY p.id
-      ORDER BY p.name COLLATE NOCASE ASC, p.id ASC
+      ORDER BY p.name COLLATE NOCASE DESC, p.id DESC
     `)
     .all() as SetlistSummaryRow[];
   return rows.map(setlistSummaryFromRow);
