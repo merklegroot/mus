@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import {
   addSetlistTrack,
+  normalizeSetlistTrackKey,
   normalizeSetlistTrackNotes,
   removeSetlistTrack,
-  updateSetlistTrackNotes,
+  reorderSetlistTracks,
+  updateSetlistTrackDetails,
 } from "@/lib/setlists";
 import { resolveMusicMp3 } from "@/lib/resolveMusicMp3";
 
@@ -31,6 +33,27 @@ function notesFromBody(body: unknown): string | null {
   return normalizeSetlistTrackNotes((body as { notes: unknown }).notes);
 }
 
+function songKeyFromBody(body: unknown): string | null {
+  if (typeof body !== "object" || body === null || !("songKey" in body)) {
+    return "";
+  }
+  return normalizeSetlistTrackKey((body as { songKey: unknown }).songKey);
+}
+
+function filenamesFromBody(body: unknown): string[] | null {
+  if (typeof body !== "object" || body === null || !("filenames" in body)) {
+    return null;
+  }
+  const filenames = (body as { filenames: unknown }).filenames;
+  if (!Array.isArray(filenames)) return null;
+  const normalized: string[] = [];
+  for (const filename of filenames) {
+    if (typeof filename !== "string" || filename.trim() === "") return null;
+    normalized.push(filename.trim());
+  }
+  return normalized;
+}
+
 export async function POST(
   request: Request,
   context: { params: Promise<{ id: string }> },
@@ -46,6 +69,23 @@ export async function POST(
     body = await request.json();
   } catch {
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
+  }
+
+  const filenames = filenamesFromBody(body);
+  if (filenames) {
+    try {
+      const setlist = reorderSetlistTracks(setlistId, filenames);
+      if (!setlist) {
+        return NextResponse.json(
+          { error: "Setlist not found" },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ setlist });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
   }
 
   const filename = filenameFromBody(body);
@@ -125,6 +165,23 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid JSON body" }, { status: 400 });
   }
 
+  const filenames = filenamesFromBody(body);
+  if (filenames) {
+    try {
+      const setlist = reorderSetlistTracks(setlistId, filenames);
+      if (!setlist) {
+        return NextResponse.json(
+          { error: "Setlist not found" },
+          { status: 404 },
+        );
+      }
+      return NextResponse.json({ setlist });
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      return NextResponse.json({ error: message }, { status: 400 });
+    }
+  }
+
   const filename = filenameFromBody(body);
   if (!filename) {
     return NextResponse.json({ error: "Filename is required" }, { status: 400 });
@@ -138,8 +195,21 @@ export async function PATCH(
     );
   }
 
+  const songKey = songKeyFromBody(body);
+  if (songKey === null) {
+    return NextResponse.json(
+      { error: "Key must be 32 characters or fewer" },
+      { status: 400 },
+    );
+  }
+
   try {
-    const setlist = updateSetlistTrackNotes(setlistId, filename, notes);
+    const setlist = updateSetlistTrackDetails(
+      setlistId,
+      filename,
+      notes,
+      songKey,
+    );
     if (!setlist) {
       return NextResponse.json({ error: "Setlist not found" }, { status: 404 });
     }

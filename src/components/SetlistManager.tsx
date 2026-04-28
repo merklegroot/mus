@@ -16,6 +16,7 @@ type SetlistTrack = {
   position: number;
   addedAt: number;
   notes: string;
+  songKey: string;
 };
 
 type SetlistDetails = SetlistSummary & {
@@ -155,12 +156,16 @@ export function SetlistManager() {
   const [songToAdd, setSongToAdd] = useState("");
   const [songSearch, setSongSearch] = useState("");
   const [isSongPickerOpen, setIsSongPickerOpen] = useState(false);
+  const [songKeyDraft, setSongKeyDraft] = useState("");
   const [notesDraft, setNotesDraft] = useState("");
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [playingFilename, setPlayingFilename] = useState<string | null>(null);
   const [queueFilenames, setQueueFilenames] = useState<string[]>([]);
+  const [draggedTrackFilename, setDraggedTrackFilename] = useState<string | null>(
+    null,
+  );
   const [selectedSongFilename, setSelectedSongFilename] = useState<string | null>(
     null,
   );
@@ -323,22 +328,26 @@ export function SetlistManager() {
 
   useEffect(() => {
     if (!selectedSongFilename) {
+      setSongKeyDraft("");
       setNotesDraft("");
       return;
     }
 
     if (!selectedTrack) {
       setSelectedSongFilename(null);
+      setSongKeyDraft("");
       setNotesDraft("");
       return;
     }
 
+    setSongKeyDraft(selectedTrack.songKey);
     setNotesDraft(selectedTrack.notes);
   }, [selectedSongFilename, selectedTrack]);
 
   function selectSong(filename: string) {
     const track = selected?.tracks.find((item) => item.filename === filename);
     setSelectedSongFilename(filename);
+    setSongKeyDraft(track?.songKey ?? "");
     setNotesDraft(track?.notes ?? "");
   }
 
@@ -524,20 +533,25 @@ export function SetlistManager() {
       setSelected(setlist);
       if (selectedSongFilename === filename) {
         setSelectedSongFilename(null);
+        setSongKeyDraft("");
         setNotesDraft("");
       }
       await loadSetlists(setlist.id);
     });
   }
 
-  async function saveSelectedSongNotes() {
+  async function saveSelectedSongDetails() {
     if (!selected || !selectedSongFilename) return;
     const filename = selectedSongFilename;
     await runAction(async () => {
       const res = await fetch(`/api/setlists/${selected.id}/tracks`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ filename, notes: notesDraft }),
+        body: JSON.stringify({
+          filename,
+          notes: notesDraft,
+          songKey: songKeyDraft,
+        }),
       });
       const data: unknown = await res.json();
       if (!res.ok) throw new Error(errorMessage(data, res.statusText));
@@ -549,11 +563,67 @@ export function SetlistManager() {
         throw new Error("Invalid setlist response");
       }
       setSelected(setlist);
-      setNotesDraft(
-        setlist.tracks.find((track) => track.filename === filename)?.notes ?? "",
+      const updatedTrack = setlist.tracks.find(
+        (track) => track.filename === filename,
       );
+      setSongKeyDraft(updatedTrack?.songKey ?? "");
+      setNotesDraft(updatedTrack?.notes ?? "");
       await loadSetlists(setlist.id);
     });
+  }
+
+  async function reorderSelectedTracks(
+    draggedFilename: string,
+    targetFilename: string,
+  ) {
+    if (!selected || draggedFilename === targetFilename) return;
+
+    const fromIndex = selected.tracks.findIndex(
+      (track) => track.filename === draggedFilename,
+    );
+    const toIndex = selected.tracks.findIndex(
+      (track) => track.filename === targetFilename,
+    );
+    if (fromIndex < 0 || toIndex < 0) return;
+
+    const previous = selected;
+    const nextTracks = [...selected.tracks];
+    const [moved] = nextTracks.splice(fromIndex, 1);
+    if (!moved) return;
+    nextTracks.splice(toIndex, 0, moved);
+    const reorderedTracks = nextTracks.map((track, index) => ({
+      ...track,
+      position: index,
+    }));
+
+    setSelected({ ...selected, tracks: reorderedTracks });
+    setBusy(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/setlists/${selected.id}/tracks`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filenames: reorderedTracks.map((track) => track.filename),
+        }),
+      });
+      const data: unknown = await res.json();
+      if (!res.ok) throw new Error(errorMessage(data, res.statusText));
+      const setlist =
+        typeof data === "object" && data !== null
+          ? (data as { setlist?: unknown }).setlist
+          : null;
+      if (!isSetlistDetails(setlist)) {
+        throw new Error("Invalid setlist response");
+      }
+      setSelected(setlist);
+      await loadSetlists(setlist.id);
+    } catch (err) {
+      setSelected(previous);
+      setError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   const panelClass =
@@ -840,8 +910,26 @@ export function SetlistManager() {
                         return (
                           <li
                             key={track.id}
+                            onDragOver={(event) => {
+                              if (!draggedTrackFilename) return;
+                              event.preventDefault();
+                            }}
+                            onDrop={(event) => {
+                              event.preventDefault();
+                              const dragged =
+                                event.dataTransfer.getData("text/plain") ||
+                                draggedTrackFilename;
+                              setDraggedTrackFilename(null);
+                              if (!dragged) return;
+                              void reorderSelectedTracks(
+                                dragged,
+                                track.filename,
+                              );
+                            }}
                             className={`flex items-center gap-3 rounded-md border text-sm ${
-                              isCurrent
+                              draggedTrackFilename === track.filename
+                                ? "border-zinc-300 bg-zinc-100 opacity-60 dark:border-zinc-700 dark:bg-zinc-900"
+                                : isCurrent
                                 ? "border-emerald-300 bg-emerald-50 ring-2 ring-emerald-200 dark:border-emerald-800 dark:bg-emerald-950/30 dark:ring-emerald-900"
                                 : isSelectedSong
                                   ? "border-sky-300 bg-sky-50 ring-2 ring-sky-200 dark:border-sky-800 dark:bg-sky-950/30 dark:ring-sky-900"
@@ -850,8 +938,27 @@ export function SetlistManager() {
                           >
                             <button
                               type="button"
+                              draggable={!busy}
+                              onDragStart={(event) => {
+                                setDraggedTrackFilename(track.filename);
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData(
+                                  "text/plain",
+                                  track.filename,
+                                );
+                              }}
+                              onDragEnd={() => setDraggedTrackFilename(null)}
+                              disabled={busy}
+                              aria-label={`Drag ${track.filename} to reorder`}
+                              title="Drag to reorder"
+                              className="ml-3 shrink-0 cursor-grab rounded-md px-2 py-1 text-zinc-400 hover:bg-zinc-100 hover:text-zinc-700 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-900 dark:hover:text-zinc-200"
+                            >
+                              ⋮⋮
+                            </button>
+                            <button
+                              type="button"
                               onClick={() => selectSong(track.filename)}
-                              className="flex min-w-0 flex-1 items-center gap-3 rounded-l-md px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
+                              className="flex min-w-0 flex-1 items-center gap-3 px-3 py-2 text-left hover:bg-zinc-100 dark:hover:bg-zinc-900"
                             >
                               <span className="w-6 shrink-0 text-right text-zinc-500">
                                 {index + 1}.
@@ -862,7 +969,8 @@ export function SetlistManager() {
                                 </span>
                                 {isSelectedSong ? (
                                   <span className="mt-0.5 block text-xs text-sky-700 dark:text-sky-300">
-                                    Selected. Edit notes in the side panel.
+                                    Selected. Edit key and notes in the side
+                                    panel.
                                   </span>
                                 ) : queueCount > 0 ? (
                                   <span className="mt-0.5 block text-xs text-amber-700 dark:text-amber-300">
@@ -878,6 +986,10 @@ export function SetlistManager() {
                               {isCurrent ? (
                                 <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-emerald-500 dark:text-emerald-950">
                                   {isPlayerPlaying ? "Now playing" : "In player"}
+                                </span>
+                              ) : track.songKey ? (
+                                <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800 dark:bg-violet-950/60 dark:text-violet-200">
+                                  Key {track.songKey}
                                 </span>
                               ) : queueCount > 0 ? (
                                 <span className="shrink-0 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white dark:bg-amber-400 dark:text-amber-950">
@@ -938,14 +1050,14 @@ export function SetlistManager() {
 
                 <aside className="rounded-md border border-zinc-200 bg-white p-4 dark:border-zinc-800 dark:bg-zinc-950">
                   <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
-                    Song notes
+                    Song details
                   </p>
                   {selectedTrack ? (
                     <form
                       className="mt-3 space-y-3"
                       onSubmit={(event) => {
                         event.preventDefault();
-                        void saveSelectedSongNotes();
+                        void saveSelectedSongDetails();
                       }}
                     >
                       <div>
@@ -956,6 +1068,20 @@ export function SetlistManager() {
                           These notes only apply to this song in this setlist.
                         </p>
                       </div>
+                      <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
+                        Key
+                        <input
+                          type="text"
+                          value={songKeyDraft}
+                          onChange={(event) =>
+                            setSongKeyDraft(event.target.value)
+                          }
+                          disabled={busy}
+                          maxLength={32}
+                          placeholder="Example: C, F#m, Bb"
+                          className="mt-1 block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-zinc-500 disabled:opacity-60 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+                        />
+                      </label>
                       <label className="block text-xs font-medium text-zinc-700 dark:text-zinc-300">
                         Notes
                         <textarea
@@ -974,16 +1100,21 @@ export function SetlistManager() {
                         </span>
                         <button
                           type="submit"
-                          disabled={busy || notesDraft.length > 5000}
+                          disabled={
+                            busy ||
+                            songKeyDraft.trim().length > 32 ||
+                            notesDraft.length > 5000
+                          }
                           className="rounded-md bg-zinc-950 px-3 py-1.5 text-xs font-semibold text-white disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950"
                         >
-                          Save notes
+                          Save details
                         </button>
                       </div>
                     </form>
                   ) : (
                     <p className="mt-3 text-sm text-zinc-500 dark:text-zinc-400">
-                      Select a song to view and edit its setlist-specific notes.
+                      Select a song to view and edit its setlist-specific key
+                      and notes.
                     </p>
                   )}
                 </aside>

@@ -6,6 +6,7 @@ export type SetlistTrackEntry = {
   position: number;
   addedAt: number;
   notes: string;
+  songKey: string;
 };
 
 export type SetlistSummary = {
@@ -34,6 +35,7 @@ type SetlistTrackRow = {
   position: number;
   addedAt: number;
   notes: string;
+  songKey: string;
 };
 
 export function ensureSetlistTables(): void {
@@ -53,6 +55,7 @@ export function ensureSetlistTables(): void {
       position INTEGER NOT NULL,
       added_at INTEGER NOT NULL,
       notes TEXT NOT NULL DEFAULT '',
+      song_key TEXT NOT NULL DEFAULT '',
       FOREIGN KEY (setlist_id) REFERENCES setlists(id) ON DELETE CASCADE
     );
 
@@ -68,6 +71,9 @@ export function ensureSetlistTables(): void {
     .all() as Array<{ name: string }>;
   if (!trackColumns.some((column) => column.name === "notes")) {
     sqlite.exec("ALTER TABLE setlist_tracks ADD COLUMN notes TEXT NOT NULL DEFAULT ''");
+  }
+  if (!trackColumns.some((column) => column.name === "song_key")) {
+    sqlite.exec("ALTER TABLE setlist_tracks ADD COLUMN song_key TEXT NOT NULL DEFAULT ''");
   }
 
   const oldSetlistsTable = sqlite
@@ -109,6 +115,13 @@ export function normalizeSetlistTrackNotes(notes: unknown): string | null {
   if (typeof notes !== "string") return null;
   const trimmed = notes.trim();
   if (trimmed.length > 5000) return null;
+  return trimmed;
+}
+
+export function normalizeSetlistTrackKey(songKey: unknown): string | null {
+  if (typeof songKey !== "string") return null;
+  const trimmed = songKey.trim();
+  if (trimmed.length > 32) return null;
   return trimmed;
 }
 
@@ -162,7 +175,7 @@ export function getSetlist(id: number): SetlistDetails | null {
 
   const tracks = sqlite
     .prepare(`
-      SELECT id, filename, position, added_at AS addedAt, notes
+      SELECT id, filename, position, added_at AS addedAt, notes, song_key AS songKey
       FROM setlist_tracks
       WHERE setlist_id = ?
       ORDER BY position ASC, id ASC
@@ -238,10 +251,11 @@ export function addSetlistTrack(
   })();
 }
 
-export function updateSetlistTrackNotes(
+export function updateSetlistTrackDetails(
   setlistId: number,
   filename: string,
   notes: string,
+  songKey: string,
 ): SetlistDetails | null {
   ensureSetlistTables();
   const sqlite = getSqliteDatabase();
@@ -251,12 +265,48 @@ export function updateSetlistTrackNotes(
     const now = Date.now();
     sqlite
       .prepare(
-        "UPDATE setlist_tracks SET notes = ? WHERE setlist_id = ? AND filename = ?",
+        "UPDATE setlist_tracks SET notes = ?, song_key = ? WHERE setlist_id = ? AND filename = ?",
       )
-      .run(notes, setlistId, filename);
+      .run(notes, songKey, setlistId, filename);
     sqlite
       .prepare("UPDATE setlists SET updated_at = ? WHERE id = ?")
       .run(now, setlistId);
+    return getSetlist(setlistId);
+  })();
+}
+
+export function reorderSetlistTracks(
+  setlistId: number,
+  filenames: string[],
+): SetlistDetails | null {
+  ensureSetlistTables();
+  const sqlite = getSqliteDatabase();
+  return sqlite.transaction(() => {
+    const setlist = getSetlist(setlistId);
+    if (!setlist) return null;
+
+    const existing = setlist.tracks.map((track) => track.filename);
+    if (
+      filenames.length !== existing.length ||
+      new Set(filenames).size !== filenames.length
+    ) {
+      throw new Error("Reorder request must include each setlist song once");
+    }
+
+    const existingSet = new Set(existing);
+    if (!filenames.every((filename) => existingSet.has(filename))) {
+      throw new Error("Reorder request contains songs outside this setlist");
+    }
+
+    const updatePosition = sqlite.prepare(
+      "UPDATE setlist_tracks SET position = ? WHERE setlist_id = ? AND filename = ?",
+    );
+    filenames.forEach((filename, index) => {
+      updatePosition.run(index, setlistId, filename);
+    });
+    sqlite
+      .prepare("UPDATE setlists SET updated_at = ? WHERE id = ?")
+      .run(Date.now(), setlistId);
     return getSetlist(setlistId);
   })();
 }
