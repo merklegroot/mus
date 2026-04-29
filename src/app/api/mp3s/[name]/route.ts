@@ -7,6 +7,7 @@ import { getDb, getSqliteDatabase } from "@/db/client";
 import { artistSetlistPreferences, tracks } from "@/db/schema";
 import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
 import { touchLibraryIndexStamp } from "@/lib/musicLibraryIndex";
+import { ensureSongIdForFilename } from "@/lib/songs";
 import { deleteSetlistTracksForFilename } from "@/lib/setlists";
 import { resolveMusicMp3 } from "@/lib/resolveMusicMp3";
 
@@ -288,6 +289,7 @@ function persistTrackDetails(
 }
 
 function jsonFromRow(
+  songId: number,
   filename: string,
   stats: Stats,
   trackNumber: number | null,
@@ -310,6 +312,7 @@ function jsonFromRow(
   },
 ) {
   return {
+    songId,
     filename,
     trackNumber,
     id3TrackNumber,
@@ -347,6 +350,7 @@ export async function GET(
   }
 
   const { absolutePath, segment, stats } = resolved;
+  const songId = ensureSongIdForFilename(segment);
 
   const cached = readCachedDetails(segment, stats);
   if (cached) {
@@ -374,6 +378,7 @@ export async function GET(
       readArtistExcludedFromSetlists(mergedArtist);
     return NextResponse.json(
       jsonFromRow(
+        songId,
         segment,
         stats,
         trackNumber,
@@ -459,6 +464,7 @@ export async function GET(
 
   return NextResponse.json(
     jsonFromRow(
+      songId,
       segment,
       stats,
       trackNumber,

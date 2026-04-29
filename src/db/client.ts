@@ -20,6 +20,23 @@ function ensureRuntimeMigrations(sqlite: InstanceType<typeof Database>): void {
       excluded_from_setlists INTEGER NOT NULL DEFAULT 0,
       updated_at INTEGER NOT NULL
     );
+
+    CREATE TABLE IF NOT EXISTS songs (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS song_files (
+      filename TEXT PRIMARY KEY,
+      song_id INTEGER NOT NULL,
+      added_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      FOREIGN KEY (song_id) REFERENCES songs(id) ON DELETE CASCADE
+    );
+
+    CREATE INDEX IF NOT EXISTS song_files_song_id_idx
+      ON song_files(song_id);
   `);
 
   const tracksTable = sqlite

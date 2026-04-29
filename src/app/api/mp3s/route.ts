@@ -4,10 +4,12 @@ import { getDb } from "@/db/client";
 import { artistSetlistPreferences, tracks } from "@/db/schema";
 import { mergedArtistForFilename } from "@/lib/mergedArtistForFilename";
 import { listMusicLibraryMp3Names } from "@/lib/musicLibraryIndex";
+import { ensureSongIdForFilename, songIdForFilename } from "@/lib/songs";
 
 export const dynamic = "force-dynamic";
 
 type SongListEntry = {
+  songId: number;
   filename: string;
   /** ID3 artist when present, otherwise primary filename inference (same merge as track details). */
   artist: string | null;
@@ -88,7 +90,9 @@ export async function GET() {
     const songs: SongListEntry[] = names.map((filename) => {
       const row = metaByFile.get(filename);
       const artist = mergedArtistForFilename(filename, row?.artist);
+      const songId = songIdForFilename(filename) ?? ensureSongIdForFilename(filename);
       return {
+        songId,
         filename,
         artist,
         title:

@@ -8,9 +8,9 @@ export const metadata: Metadata = {
 export default async function SongDetailsRoute({
   params,
 }: {
-  params: Promise<{ name: string }>;
+  params: Promise<{ id: string }>;
 }) {
-  const { name } = await params;
-  return <SongDetailsPage filename={name} />;
+  const { id } = await params;
+  return <SongDetailsPage songId={id} />;
 }
 

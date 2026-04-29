@@ -9,6 +9,7 @@ import { InferFromFilenamePanel } from "@/components/InferFromFilenamePanel";
 import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
 
 type SongRow = {
+  songId: number;
   filename: string;
   artist: string | null;
   title: string | null;
@@ -68,6 +69,10 @@ function parseSongsResponse(data: unknown):
           (item as { artistExcludedFromSetlists?: unknown })
             .artistExcludedFromSetlists === true;
         songs.push({
+          songId:
+            typeof (item as { songId?: unknown }).songId === "number"
+              ? (item as { songId: number }).songId
+              : -1,
           filename,
           artist,
           title,
@@ -85,6 +90,7 @@ function parseSongsResponse(data: unknown):
     return {
       ok: true,
       songs: mp3s.map((filename) => ({
+        songId: -1,
         filename,
         artist: null,
         title: null,
@@ -139,6 +145,7 @@ function songListDisplay(s: SongRow):
 }
 
 type Mp3Details = {
+  songId: number;
   filename: string;
   trackNumber: number | null;
   comments: string | null;
@@ -192,6 +199,7 @@ function isMp3Details(data: unknown): data is Mp3Details {
   if (typeof data !== "object" || data === null) return false;
   const d = data as Record<string, unknown>;
   return (
+    typeof d.songId === "number" &&
     typeof d.filename === "string" &&
     typeof d.sizeBytes === "number" &&
     typeof d.modified === "string"
@@ -489,6 +497,7 @@ export function MusicLibraryControl() {
               prev?.status === "ready" &&
               songMatchesArtistFilter(
                 {
+                  songId: prev.data.songId,
                   filename: prev.data.filename,
                   artist: prev.data.artist,
                   title: prev.data.title,
@@ -651,7 +660,12 @@ export function MusicLibraryControl() {
           {selected ? (
             <div className="flex shrink-0 items-center gap-2">
               <Link
-                href={`/song/${encodeURIComponent(selected)}`}
+                href={
+                  detail?.status === "ready"
+                    ? `/song/${encodeURIComponent(String(detail.data.songId))}`
+                    : "#"
+                }
+                aria-disabled={detail?.status !== "ready"}
                 className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
               >
                 Open song page

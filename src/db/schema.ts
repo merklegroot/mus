@@ -134,3 +134,30 @@ export const setlistTracks = sqliteTable(
 
 export type SetlistTrack = typeof setlistTracks.$inferSelect;
 export type NewSetlistTrack = typeof setlistTracks.$inferInsert;
+
+/** Stable song identity (decoupled from a specific filename). */
+export const songs = sqliteTable("songs", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  createdAt: integer("created_at", { mode: "number" }).notNull(),
+  updatedAt: integer("updated_at", { mode: "number" }).notNull(),
+});
+
+export type Song = typeof songs.$inferSelect;
+export type NewSong = typeof songs.$inferInsert;
+
+/** Maps music files in the library to a stable song id. */
+export const songFiles = sqliteTable(
+  "song_files",
+  {
+    filename: text("filename").primaryKey(),
+    songId: integer("song_id").notNull().references(() => songs.id, {
+      onDelete: "cascade",
+    }),
+    addedAt: integer("added_at", { mode: "number" }).notNull(),
+    updatedAt: integer("updated_at", { mode: "number" }).notNull(),
+  },
+  (table) => [index("song_files_song_id_idx").on(table.songId)],
+);
+
+export type SongFile = typeof songFiles.$inferSelect;
+export type NewSongFile = typeof songFiles.$inferInsert;

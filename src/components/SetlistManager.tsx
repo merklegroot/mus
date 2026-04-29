@@ -25,6 +25,7 @@ type SetlistDetails = SetlistSummary & {
 };
 
 type SongRow = {
+  songId: number;
   filename: string;
   artist: string | null;
   album: string | null;
@@ -143,6 +144,7 @@ function isSongRow(value: unknown): value is SongRow {
   return (
     typeof value === "object" &&
     value !== null &&
+    typeof (value as { songId: unknown }).songId === "number" &&
     typeof (value as { filename: unknown }).filename === "string"
   );
 }
@@ -330,6 +332,16 @@ export function SetlistManager() {
       null,
     [selected, selectedSongFilename],
   );
+
+  const songIdByFilename = useMemo(() => {
+    const map = new Map<string, number>();
+    for (const s of songs) {
+      if (typeof s.filename === "string" && typeof s.songId === "number") {
+        map.set(s.filename, s.songId);
+      }
+    }
+    return map;
+  }, [songs]);
 
   useEffect(() => {
     if (!selectedSongFilename) {
@@ -1186,12 +1198,16 @@ export function SetlistManager() {
                           {selectedTrack.filename}
                         </p>
                         <div className="mt-2 flex flex-wrap items-center gap-2">
-                          <Link
-                            href={`/song/${encodeURIComponent(selectedTrack.filename)}`}
-                            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                          >
-                            Open song page
-                          </Link>
+                          {songIdByFilename.get(selectedTrack.filename) ? (
+                            <Link
+                              href={`/song/${encodeURIComponent(
+                                String(songIdByFilename.get(selectedTrack.filename)),
+                              )}`}
+                              className="rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                            >
+                              Open song page
+                            </Link>
+                          ) : null}
                         </div>
                         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                           These notes only apply to this song in this setlist.
