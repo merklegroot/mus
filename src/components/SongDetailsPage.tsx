@@ -207,7 +207,12 @@ export function SongDetailsPage({ songId }: { songId: string }) {
           </h1>
           {state.status === "ready" && state.primary?.artist ? (
             <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-300">
-              {state.primary.artist}
+              <Link
+                href={`/artist/${encodeURIComponent(state.primary.artist)}`}
+                className="font-medium text-zinc-900 underline-offset-4 hover:underline dark:text-zinc-100"
+              >
+                {state.primary.artist}
+              </Link>
               {state.primary.album ? (
                 <span className="text-zinc-400 dark:text-zinc-500">
                   {" "}
@@ -219,21 +224,6 @@ export function SongDetailsPage({ songId }: { songId: string }) {
           <p className="mt-2 break-all text-xs text-zinc-500 dark:text-zinc-400">
             Song id: {songId}
           </p>
-        </div>
-
-        <div className="flex shrink-0 flex-wrap items-center gap-2">
-          <Link
-            href="/"
-            className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-          >
-            Home
-          </Link>
-          <Link
-            href="/setlists"
-            className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-          >
-            Setlists
-          </Link>
         </div>
       </header>
 
