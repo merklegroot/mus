@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 type SetlistSummary = {
@@ -379,6 +380,9 @@ export function SetlistManager() {
 
   function addToQueue(filename: string) {
     setQueueFilenames((prev) => [...prev, filename]);
+    if (!playingFilename) {
+      setIsPlayerVisible(false);
+    }
   }
 
   function closePlayer() {
@@ -656,16 +660,20 @@ export function SetlistManager() {
 
   const panelClass =
     "rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 dark:border-zinc-800 dark:bg-zinc-900/40";
-  const hasHiddenPlayer =
-    !isPlayerVisible && (playingFilename !== null || queueFilenames.length > 0);
+  /** Expanded dock only exists while something is loaded for playback. */
+  const showExpandedPlayerDock = Boolean(playingFilename && isPlayerVisible);
+  /** Collapsed strip whenever there is a queue or a loaded track but the big player is not shown. */
+  const showCollapsedPlayerDock =
+    !showExpandedPlayerDock &&
+    (playingFilename !== null || queueFilenames.length > 0);
 
   return (
     <>
     <main
       className={`flex flex-1 flex-col gap-6 ${
-        playingFilename && isPlayerVisible
+        showExpandedPlayerDock
           ? "pb-36"
-          : hasHiddenPlayer
+          : showCollapsedPlayerDock
             ? "pb-24"
             : ""
       }`}
@@ -1099,10 +1107,6 @@ export function SetlistManager() {
                                 <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-xs font-semibold text-white dark:bg-emerald-500 dark:text-emerald-950">
                                   {isPlayerPlaying ? "Now playing" : "In player"}
                                 </span>
-                              ) : track.songKey ? (
-                                <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800 dark:bg-violet-950/60 dark:text-violet-200">
-                                  Key {track.songKey}
-                                </span>
                               ) : queueCount > 0 ? (
                                 <span className="shrink-0 rounded-full bg-amber-600 px-2 py-0.5 text-xs font-semibold text-white dark:bg-amber-400 dark:text-amber-950">
                                   Queued
@@ -1145,6 +1149,11 @@ export function SetlistManager() {
                                 Show player
                               </button>
                             ) : null}
+                            {track.songKey ? (
+                              <span className="shrink-0 rounded-full bg-violet-100 px-2 py-0.5 text-xs font-semibold text-violet-800 dark:bg-violet-950/60 dark:text-violet-200">
+                                Key {track.songKey}
+                              </span>
+                            ) : null}
                             <button
                               type="button"
                               onClick={() => void removeSong(track.filename)}
@@ -1176,6 +1185,14 @@ export function SetlistManager() {
                         <p className="break-all text-sm font-semibold text-zinc-950 dark:text-zinc-50">
                           {selectedTrack.filename}
                         </p>
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                          <Link
+                            href={`/song/${encodeURIComponent(selectedTrack.filename)}`}
+                            className="rounded-md border border-zinc-300 bg-white px-2.5 py-1.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                          >
+                            Open song page
+                          </Link>
+                        </div>
                         <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">
                           These notes only apply to this song in this setlist.
                         </p>
@@ -1236,7 +1253,7 @@ export function SetlistManager() {
         </section>
       </div>
     </main>
-    {playingFilename && isPlayerVisible ? (
+    {showExpandedPlayerDock ? (
       <aside
         className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
         aria-label="Music player"
@@ -1302,7 +1319,7 @@ export function SetlistManager() {
             onPause={() => setIsPlayerPlaying(false)}
             onEnded={handleTrackEnded}
             className="h-10 w-full min-w-0 flex-1 accent-zinc-900 dark:accent-zinc-100"
-            src={`/api/mp3s/${encodeURIComponent(playingFilename)}/stream`}
+            src={`/api/mp3s/${encodeURIComponent(playingFilename!)}/stream`}
           >
             Your browser does not support the audio element.
           </audio>
@@ -1317,7 +1334,7 @@ export function SetlistManager() {
           </button>
         </div>
       </aside>
-    ) : hasHiddenPlayer ? (
+    ) : showCollapsedPlayerDock ? (
       <aside
         className="fixed inset-x-0 bottom-0 z-40 border-t border-zinc-200 bg-white/95 px-4 py-3 shadow-[0_-8px_30px_rgba(0,0,0,0.08)] backdrop-blur dark:border-zinc-800 dark:bg-zinc-950/95"
         aria-label="Hidden music player"
@@ -1335,14 +1352,14 @@ export function SetlistManager() {
             type="button"
             onClick={showHiddenPlayer}
             className="inline-flex size-10 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
-            aria-label={playingFilename ? "Expand player" : "Play queued"}
-            title={playingFilename ? "Expand player" : "Play queued"}
+            aria-label="Expand player"
+            title={
+              playingFilename
+                ? "Expand player"
+                : "Expand player (plays first in queue)"
+            }
           >
-            {playingFilename ? (
-              <ExpandIcon className="size-5" />
-            ) : (
-              <PlayIcon className="size-4" />
-            )}
+            <ExpandIcon className="size-5" />
           </button>
         </div>
       </aside>

@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { AlbumList } from "@/components/AlbumList";
@@ -648,16 +649,24 @@ export function MusicLibraryControl() {
             Song Details
           </h2>
           {selected ? (
-            <button
-              type="button"
-              onClick={() => {
-                setSelected(null);
-                setDetail(null);
-              }}
-              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-            >
-              Clear selection
-            </button>
+            <div className="flex shrink-0 items-center gap-2">
+              <Link
+                href={`/song/${encodeURIComponent(selected)}`}
+                className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+              >
+                Open song page
+              </Link>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelected(null);
+                  setDetail(null);
+                }}
+                className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              >
+                Clear selection
+              </button>
+            </div>
           ) : null}
         </div>
         {!selected ? (
