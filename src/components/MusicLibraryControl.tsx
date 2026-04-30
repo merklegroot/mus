@@ -214,13 +214,13 @@ export function MusicLibraryControl() {
   const [filterAlbum, setFilterAlbum] = useState<string | null>(null);
   const [selected, setSelected] = useState<string | null>(null);
   const [bulkSelected, setBulkSelected] = useState<string[]>([]);
+  const [bulkAnchor, setBulkAnchor] = useState<string | null>(null);
   const [detail, setDetail] = useState<DetailState | null>(null);
   const [deleteConfirm, setDeleteConfirm] = useState(false);
   const [deleteBusy, setDeleteBusy] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [visibilityBusy, setVisibilityBusy] = useState(false);
   const [visibilityError, setVisibilityError] = useState<string | null>(null);
-  const [bulkOpen, setBulkOpen] = useState(false);
   const [bulkBusy, setBulkBusy] = useState(false);
   const [bulkError, setBulkError] = useState<string | null>(null);
   const [bulkResult, setBulkResult] = useState<{ okCount: number; failCount: number } | null>(
@@ -327,6 +327,15 @@ export function MusicLibraryControl() {
     return [...groups.values()].sort((a, b) => a.artist.localeCompare(b.artist));
   }, [visibleSongs]);
 
+  // Range selection should follow the UI order (artists sorted + songs within each group).
+  const visibleFilenamesUiOrder = useMemo(() => {
+    const out: string[] = [];
+    for (const g of visibleSongGroups) {
+      for (const s of g.songs) out.push(s.row.filename);
+    }
+    return out;
+  }, [visibleSongGroups]);
+
   const albumList = useMemo(() => {
     if (state.status !== "ready") return [];
     const scope = filterArtist
@@ -367,8 +376,26 @@ export function MusicLibraryControl() {
   useEffect(() => {
     setBulkError(null);
     setBulkResult(null);
-    if (bulkSelected.length === 0) setBulkOpen(false);
+    if (bulkSelected.length === 0) {
+      setBulkAnchor(null);
+    }
   }, [bulkSelected.length]);
+
+  // Only show details when exactly one song is selected.
+  useEffect(() => {
+    if (bulkSelected.length === 1) {
+      const only = bulkSelected[0];
+      if (selected !== only) {
+        setSelected(only);
+        setDetail({ status: "loading" });
+      }
+      return;
+    }
+    if (selected !== null) {
+      setSelected(null);
+      setDetail(null);
+    }
+  }, [bulkSelected, selected]);
 
   useEffect(() => {
     if (state.status !== "ready") return;
@@ -376,8 +403,39 @@ export function MusicLibraryControl() {
     setBulkSelected((prev) => prev.filter((f) => known.has(f)));
   }, [state]);
 
-  function toggleBulk(filename: string): void {
-    setBulkSelected((prev) => (prev.includes(filename) ? prev.filter((f) => f !== filename) : [...prev, filename]));
+  function computeNextBulkSelection(args: {
+    filename: string;
+    e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean };
+  }): { nextSelected: string[]; nextAnchor: string | null } {
+    const { filename, e } = args;
+    const isToggle = e.metaKey || e.ctrlKey;
+    if (isToggle) {
+      const nextSelected = bulkSelected.includes(filename)
+        ? bulkSelected.filter((f) => f !== filename)
+        : [...bulkSelected, filename];
+      return { nextSelected, nextAnchor: filename };
+    }
+
+    if (e.shiftKey && bulkAnchor) {
+      const a = visibleFilenamesUiOrder.indexOf(bulkAnchor);
+      const b = visibleFilenamesUiOrder.indexOf(filename);
+      if (a !== -1 && b !== -1) {
+        const [start, end] = a <= b ? [a, b] : [b, a];
+        const nextSelected = visibleFilenamesUiOrder.slice(start, end + 1);
+        return { nextSelected, nextAnchor: bulkAnchor };
+      }
+    }
+
+    return { nextSelected: [filename], nextAnchor: filename };
+  }
+
+  function setBulkSelectionFromClick(
+    filename: string,
+    e: { shiftKey: boolean; metaKey: boolean; ctrlKey: boolean },
+  ): void {
+    const { nextSelected, nextAnchor } = computeNextBulkSelection({ filename, e });
+    setBulkSelected(nextSelected);
+    setBulkAnchor(nextAnchor);
   }
 
   async function applyBulkTags(): Promise<void> {
@@ -537,8 +595,9 @@ export function MusicLibraryControl() {
       return true;
     });
     if (!stillVisible) {
-      setSelected(null);
-      setDetail(null);
+      // Clear selection entirely so the "single-selection details" effect
+      // doesn't immediately re-select the now-filtered-out filename.
+      setBulkSelected([]);
     }
   }, [filterArtist, filterAlbum, selected, songsForFilter]);
 
@@ -688,189 +747,26 @@ export function MusicLibraryControl() {
             </button>
           ) : null}
         </div>
-        {bulkSelected.length > 0 ? (
-          <div className="mb-3 rounded-md border border-zinc-200 bg-white p-3 text-sm dark:border-zinc-800 dark:bg-zinc-950">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="text-zinc-800 dark:text-zinc-200">
-                <span className="font-medium">{bulkSelected.length}</span> selected
-                {bulkVisibleCount !== bulkSelected.length ? (
-                  <span className="text-zinc-500 dark:text-zinc-400">
-                    {" "}
-                    · {bulkVisibleCount} visible
-                  </span>
-                ) : null}
-              </div>
-              <div className="flex flex-wrap gap-2">
-                <button
-                  type="button"
-                  onClick={() => setBulkOpen((v) => !v)}
-                  className="rounded-md border border-zinc-300 bg-white px-2 py-1 text-xs font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
-                >
-                  {bulkOpen ? "Hide bulk edit" : "Bulk edit ID3…"}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setBulkSelected([])}
-                  className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-                >
-                  Clear selection
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    const all = visibleSongs.map((s) => s.filename);
-                    setBulkSelected((prev) => {
-                      const set = new Set(prev);
-                      for (const f of all) set.add(f);
-                      return [...set];
-                    });
-                  }}
-                  className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-                >
-                  Select all visible
-                </button>
-              </div>
+        {bulkSelected.length > 1 ? (
+          <div className="mb-3 flex items-center justify-between gap-2 text-sm">
+            <div className="text-zinc-800 dark:text-zinc-200">
+              <span className="font-medium">{bulkSelected.length}</span> selected
+              {bulkVisibleCount !== bulkSelected.length ? (
+                <span className="text-zinc-500 dark:text-zinc-400">
+                  {" "}
+                  · {bulkVisibleCount} visible
+                </span>
+              ) : null}
             </div>
-
-            {bulkOpen ? (
-              <div className="mt-3 space-y-2">
-                <div className="grid grid-cols-1 gap-2">
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={bulkForm.setAlbum}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, setAlbum: e.target.checked }))}
-                    />
-                    <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                      Album
-                    </span>
-                    <input
-                      type="text"
-                      value={bulkForm.album}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, album: e.target.value }))}
-                      placeholder="(leave blank to clear)"
-                      className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                    />
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={bulkForm.setArtist}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, setArtist: e.target.checked }))}
-                    />
-                    <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                      Artist
-                    </span>
-                    <input
-                      type="text"
-                      value={bulkForm.artist}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, artist: e.target.value }))}
-                      placeholder="(leave blank to clear)"
-                      className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                    />
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={bulkForm.setGenre}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, setGenre: e.target.checked }))}
-                    />
-                    <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                      Genre
-                    </span>
-                    <input
-                      type="text"
-                      value={bulkForm.genre}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, genre: e.target.value }))}
-                      placeholder="(leave blank to clear)"
-                      className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                    />
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={bulkForm.setYear}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, setYear: e.target.checked }))}
-                    />
-                    <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                      Year
-                    </span>
-                    <input
-                      type="text"
-                      inputMode="numeric"
-                      value={bulkForm.year}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, year: e.target.value }))}
-                      placeholder="e.g. 1999 (blank clears)"
-                      className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                    />
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={bulkForm.setComments}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, setComments: e.target.checked }))}
-                    />
-                    <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                      Comments
-                    </span>
-                    <input
-                      type="text"
-                      value={bulkForm.comments}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, comments: e.target.value }))}
-                      placeholder="(leave blank to clear)"
-                      className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                    />
-                  </label>
-
-                  <label className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={bulkForm.setTitle}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, setTitle: e.target.checked }))}
-                    />
-                    <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
-                      Title
-                    </span>
-                    <input
-                      type="text"
-                      value={bulkForm.title}
-                      onChange={(e) => setBulkForm((p) => ({ ...p, title: e.target.value }))}
-                      placeholder="(leave blank to clear)"
-                      className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-                    />
-                  </label>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    disabled={bulkBusy}
-                    onClick={() => void applyBulkTags()}
-                    className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-950 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
-                  >
-                    {bulkBusy ? "Applying…" : "Apply to selected"}
-                  </button>
-                  {bulkResult ? (
-                    <span className="text-xs text-zinc-600 dark:text-zinc-400">
-                      Updated {bulkResult.okCount}
-                      {bulkResult.failCount > 0 ? ` · Failed ${bulkResult.failCount}` : ""}
-                    </span>
-                  ) : null}
-                  {bulkError ? (
-                    <span className="text-xs text-red-600 dark:text-red-400">
-                      {bulkError}
-                    </span>
-                  ) : null}
-                  <span className="text-xs text-zinc-500 dark:text-zinc-400">
-                    Only checked fields are changed.
-                  </span>
-                </div>
-              </div>
-            ) : null}
+            <div className="flex shrink-0 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBulkSelected([])}
+                className="rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              >
+                Clear selection
+              </button>
+            </div>
           </div>
         ) : null}
         {state.status === "loading" ? (
@@ -918,24 +814,22 @@ export function MusicLibraryControl() {
                     <li key={`${row.filename}:${idx}`}>
                       <button
                         type="button"
-                        onClick={() => {
-                          setSelected(row.filename);
-                          setDetail({ status: "loading" });
+                        onClick={(e) => {
+                          setBulkSelectionFromClick(row.filename, {
+                            shiftKey: e.shiftKey,
+                            metaKey: e.metaKey,
+                            ctrlKey: e.ctrlKey,
+                          });
                         }}
-                        className={`w-full rounded-md px-2 py-2 text-left transition-colors ${selected === row.filename
+                        className={`w-full rounded-md px-2 py-2 text-left transition-colors ${
+                          selected === row.filename
                             ? "bg-zinc-200 font-medium text-zinc-950 dark:bg-zinc-800 dark:text-zinc-50"
-                            : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-                          }`}
+                            : bulkSet.has(row.filename)
+                              ? "bg-zinc-100 text-zinc-900 hover:bg-zinc-100 dark:bg-zinc-900/50 dark:text-zinc-100 dark:hover:bg-zinc-900/50"
+                              : "text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+                        }`}
                       >
-                        <span className="mb-1 flex items-center gap-2">
-                          <input
-                            type="checkbox"
-                            checked={bulkSet.has(row.filename)}
-                            onClick={(e) => e.stopPropagation()}
-                            onChange={() => toggleBulk(row.filename)}
-                            className="h-4 w-4"
-                            aria-label={`Select ${row.filename}`}
-                          />
+                        <span className="flex items-start justify-between gap-2">
                           <span className="min-w-0 flex-1">
                             {display.kind === "metadata" ? (
                               <span className="block min-w-0 break-words">
@@ -947,12 +841,15 @@ export function MusicLibraryControl() {
                               </span>
                             )}
                           </span>
+                          {bulkSet.has(row.filename) ? (
+                            <span
+                              className="mt-0.5 shrink-0 rounded-full bg-zinc-900/10 px-2 py-0.5 text-[11px] font-medium text-zinc-800 dark:bg-zinc-100/10 dark:text-zinc-200"
+                              aria-label="Selected for bulk edit"
+                            >
+                              Selected
+                            </span>
+                          ) : null}
                         </span>
-                        {display.kind === "metadata" ? (
-                          null
-                        ) : (
-                          null
-                        )}
                         {row.excludedFromSetlists ||
                         row.artistExcludedFromSetlists ? (
                           <span className="mt-0.5 block text-xs font-normal text-amber-700 dark:text-amber-300">
@@ -971,15 +868,199 @@ export function MusicLibraryControl() {
         )}
       </section>
 
-      <aside
-        className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-hidden lg:max-h-[min(90vh,56rem)] ${selected ? "" : "max-lg:hidden"}`}
-        aria-label="Track details"
-      >
-        <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
-          <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
-            Song Details
-          </h2>
-          {selected ? (
+      {bulkSelected.length > 1 ? (
+        <aside
+          className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-hidden lg:max-h-[min(90vh,56rem)]`}
+          aria-label="Bulk edit ID3"
+        >
+          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              Bulk Edit ID3
+            </h2>
+          </div>
+
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <p className="mb-3 text-sm text-zinc-600 dark:text-zinc-400">
+              <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                {bulkSelected.length}
+              </span>{" "}
+              selected. Only checked fields are changed.
+            </p>
+            <div className="space-y-2">
+              <div className="grid grid-cols-1 gap-2">
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={bulkForm.setAlbum}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, setAlbum: e.target.checked }))
+                    }
+                  />
+                  <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Album
+                  </span>
+                  <input
+                    type="text"
+                    value={bulkForm.album}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, album: e.target.value }))
+                    }
+                    placeholder="(leave blank to clear)"
+                    className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={bulkForm.setArtist}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, setArtist: e.target.checked }))
+                    }
+                  />
+                  <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Artist
+                  </span>
+                  <input
+                    type="text"
+                    value={bulkForm.artist}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, artist: e.target.value }))
+                    }
+                    placeholder="(leave blank to clear)"
+                    className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={bulkForm.setGenre}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, setGenre: e.target.checked }))
+                    }
+                  />
+                  <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Genre
+                  </span>
+                  <input
+                    type="text"
+                    value={bulkForm.genre}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, genre: e.target.value }))
+                    }
+                    placeholder="(leave blank to clear)"
+                    className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={bulkForm.setYear}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, setYear: e.target.checked }))
+                    }
+                  />
+                  <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Year
+                  </span>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    value={bulkForm.year}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, year: e.target.value }))
+                    }
+                    placeholder="e.g. 1999 (blank clears)"
+                    className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={bulkForm.setComments}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, setComments: e.target.checked }))
+                    }
+                  />
+                  <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Comments
+                  </span>
+                  <input
+                    type="text"
+                    value={bulkForm.comments}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, comments: e.target.value }))
+                    }
+                    placeholder="(leave blank to clear)"
+                    className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </label>
+
+                <label className="flex items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={bulkForm.setTitle}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, setTitle: e.target.checked }))
+                    }
+                  />
+                  <span className="w-16 text-xs font-medium text-zinc-600 dark:text-zinc-400">
+                    Title
+                  </span>
+                  <input
+                    type="text"
+                    value={bulkForm.title}
+                    onChange={(e) =>
+                      setBulkForm((p) => ({ ...p, title: e.target.value }))
+                    }
+                    placeholder="(leave blank to clear)"
+                    className="min-w-0 flex-1 rounded-md border border-zinc-300 bg-white px-2 py-1 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </label>
+              </div>
+
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  disabled={bulkBusy}
+                  onClick={() => void applyBulkTags()}
+                  className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-950 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                >
+                  {bulkBusy ? "Applying…" : "Apply to selected"}
+                </button>
+                {bulkResult ? (
+                  <span className="text-xs text-zinc-600 dark:text-zinc-400">
+                    Updated {bulkResult.okCount}
+                    {bulkResult.failCount > 0 ? ` · Failed ${bulkResult.failCount}` : ""}
+                  </span>
+                ) : null}
+                {bulkError ? (
+                  <span className="text-xs text-red-600 dark:text-red-400">
+                    {bulkError}
+                  </span>
+                ) : null}
+              </div>
+
+              <p className="text-xs text-zinc-500 dark:text-zinc-400">
+                Shift+click selects a range. Cmd/Ctrl+click toggles.
+              </p>
+            </div>
+          </div>
+        </aside>
+      ) : null}
+
+      {selected && bulkSelected.length === 1 ? (
+        <aside
+          className={`${panelClass} flex h-full min-h-0 min-w-0 flex-col overflow-hidden lg:max-h-[min(90vh,56rem)]`}
+          aria-label="Track details"
+        >
+          <div className="mb-3 flex shrink-0 flex-wrap items-center justify-between gap-2">
+            <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+              Song Details
+            </h2>
             <div className="flex shrink-0 items-center gap-2">
               <Link
                 href={
@@ -994,269 +1075,248 @@ export function MusicLibraryControl() {
               </Link>
               <button
                 type="button"
-                onClick={() => {
-                  setSelected(null);
-                  setDetail(null);
-                }}
+                onClick={() => setBulkSelected([])}
                 className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
               >
                 Clear selection
               </button>
             </div>
-          ) : null}
-        </div>
-        {!selected ? (
-          <p className="text-sm text-zinc-500">
-            Select a track to see details.
-          </p>
-        ) : (
-          <>
-            <div className="mb-4 min-w-0 shrink-0 overflow-x-auto">
-              <audio
-                key={selected}
-                controls
-                preload="metadata"
-                className="block h-10 w-full max-w-full accent-zinc-900 dark:accent-zinc-100"
-                src={`/api/mp3s/${encodeURIComponent(selected)}/stream`}
-              >
-                Your browser does not support the audio element.
-              </audio>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto">
-              <InferFromFilenamePanel
-                key={`infer-${selected}`}
-                filename={selected}
-                onRenamed={async (newFilename) => {
-                  setSelected(newFilename);
-                  setDetail({ status: "loading" });
-                  try {
-                    await refreshSongs();
-                  } catch {
-                    /* keep previous list */
-                  }
-                }}
-                onTagsSaved={async () => {
-                  try {
-                    await refreshSongs();
-                  } catch {
-                    /* keep previous list */
-                  }
-                }}
-                actions={
-                  deleteConfirm ? null : (
-                    <>
-                      {detail?.status === "ready" ? (
-                        <button
-                          type="button"
-                          disabled={visibilityBusy}
-                          onClick={() =>
-                            void setSelectedSetlistVisibility(
-                              !detail.data.excludedFromSetlists,
-                            )
-                          }
-                          className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                        >
-                          {visibilityBusy
-                            ? "Saving…"
-                            : detail.data.excludedFromSetlists
-                              ? "Show in setlists"
-                              : "Hide from setlists"}
-                        </button>
-                      ) : null}
+          </div>
+          <div className="mb-4 min-w-0 shrink-0 overflow-x-auto">
+            <audio
+              key={selected}
+              controls
+              preload="metadata"
+              className="block h-10 w-full max-w-full accent-zinc-900 dark:accent-zinc-100"
+              src={`/api/mp3s/${encodeURIComponent(selected)}/stream`}
+            >
+              Your browser does not support the audio element.
+            </audio>
+          </div>
+          <div className="min-h-0 flex-1 overflow-y-auto">
+            <InferFromFilenamePanel
+              key={`infer-${selected}`}
+              filename={selected}
+              onRenamed={async (newFilename) => {
+                setBulkSelected([newFilename]);
+                setBulkAnchor(newFilename);
+                setDetail({ status: "loading" });
+                try {
+                  await refreshSongs();
+                } catch {
+                  /* keep previous list */
+                }
+              }}
+              onTagsSaved={async () => {
+                try {
+                  await refreshSongs();
+                } catch {
+                  /* keep previous list */
+                }
+              }}
+              actions={
+                deleteConfirm ? null : (
+                  <>
+                    {detail?.status === "ready" ? (
                       <button
                         type="button"
-                        onClick={() => {
-                          setDeleteConfirm(true);
-                          setDeleteError(null);
-                        }}
-                        className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
-                      >
-                        Delete file…
-                      </button>
-                    </>
-                  )
-                }
-              />
-              {visibilityError ? (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                  {visibilityError}
-                </p>
-              ) : null}
-              {deleteConfirm ? (
-                <div className="mt-2 flex flex-col gap-2">
-                  <p className="break-all text-xs text-red-950 dark:text-red-100">
-                    Delete <span className="font-mono">{selected}</span>?
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      disabled={deleteBusy}
-                      onClick={() => {
-                        setDeleteConfirm(false);
-                        setDeleteError(null);
-                      }}
-                      className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
-                    >
-                      Cancel
-                    </button>
-                    <button
-                      type="button"
-                      disabled={deleteBusy}
-                      onClick={async () => {
-                        if (!selected) return;
-                        setDeleteBusy(true);
-                        setDeleteError(null);
-                        try {
-                          const res = await fetch(
-                            `/api/mp3s/${encodeURIComponent(selected)}`,
-                            { method: "DELETE" },
-                          );
-                          const data: unknown = await res.json().catch(() => ({}));
-                          if (!res.ok) {
-                            const message =
-                              typeof data === "object" &&
-                                data !== null &&
-                                "error" in data &&
-                                typeof (data as { error: unknown }).error === "string"
-                                ? (data as { error: string }).error
-                                : res.statusText;
-                            setDeleteError(message);
-                            return;
-                          }
-                          setSelected(null);
-                          setDetail(null);
-                          setDeleteConfirm(false);
-                          const listRes = await fetch("/api/mp3s");
-                          const listData: unknown = await listRes.json();
-                          if (!listRes.ok) return;
-                          const parsed = parseSongsResponse(listData);
-                          if (!parsed.ok) return;
-                          if (parsed.songs.length === 0) {
-                            setState({ status: "empty" });
-                          } else {
-                            setState({ status: "ready", songs: parsed.songs });
-                          }
-                        } catch (e) {
-                          setDeleteError(
-                            e instanceof Error ? e.message : String(e),
-                          );
-                        } finally {
-                          setDeleteBusy(false);
+                        disabled={visibilityBusy}
+                        onClick={() =>
+                          void setSelectedSetlistVisibility(
+                            !detail.data.excludedFromSetlists,
+                          )
                         }
-                      }}
-                      className="rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
-                    >
-                      {deleteBusy ? "Deleting…" : "Delete permanently"}
-                    </button>
-                  </div>
-                </div>
-              ) : null}
-              {deleteError ? (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                  {deleteError}
-                </p>
-              ) : null}
-              {!detail || detail.status === "loading" ? (
-                <p className="text-sm text-zinc-500">Loading…</p>
-              ) : detail.status === "error" ? (
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {detail.message}
-                </p>
-              ) : (
-                <div className="text-sm">
-                  <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                    <DetailRow label="File" value={detail.data.filename} />
-                    <DetailRow
-                      label="Title"
-                      value={detail.data.title}
-                      suffix={
-                        detail.data.titleSource === "filename" ? (
-                          <span className="text-zinc-500 dark:text-zinc-400">
-                            {" "}
-                            · inferred from filename
-                          </span>
-                        ) : null
-                      }
-                    />
-                    <DetailRow
-                      label="Artist"
-                      value={detail.data.artist}
-                      suffix={
-                        detail.data.artistSource === "filename" ? (
-                          <span className="text-zinc-500 dark:text-zinc-400">
-                            {" "}
-                            · inferred from filename
-                          </span>
-                        ) : null
-                      }
-                    />
-                    <DetailRow label="Album" value={detail.data.album} />
-                    <DetailRow
-                      label="Setlists"
-                      value={
-                        detail.data.artistExcludedFromSetlists
-                          ? "Hidden by artist setting"
+                        className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                      >
+                        {visibilityBusy
+                          ? "Saving…"
                           : detail.data.excludedFromSetlists
+                            ? "Show in setlists"
+                            : "Hide from setlists"}
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setDeleteConfirm(true);
+                        setDeleteError(null);
+                      }}
+                      className="rounded-md border border-red-300 bg-white px-3 py-1.5 text-sm font-medium text-red-800 hover:bg-red-50 dark:border-red-800 dark:bg-red-950 dark:text-red-200 dark:hover:bg-red-900/50"
+                    >
+                      Delete file…
+                    </button>
+                  </>
+                )
+              }
+            />
+            {visibilityError ? (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {visibilityError}
+              </p>
+            ) : null}
+            {deleteConfirm ? (
+              <div className="mt-2 flex flex-col gap-2">
+                <p className="break-all text-xs text-red-950 dark:text-red-100">
+                  Delete <span className="font-mono">{selected}</span>?
+                </p>
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    disabled={deleteBusy}
+                    onClick={() => {
+                      setDeleteConfirm(false);
+                      setDeleteError(null);
+                    }}
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="button"
+                    disabled={deleteBusy}
+                    onClick={async () => {
+                      if (!selected) return;
+                      setDeleteBusy(true);
+                      setDeleteError(null);
+                      try {
+                        const res = await fetch(
+                          `/api/mp3s/${encodeURIComponent(selected)}`,
+                          { method: "DELETE" },
+                        );
+                        const data: unknown = await res.json().catch(() => ({}));
+                        if (!res.ok) {
+                          const message =
+                            typeof data === "object" &&
+                              data !== null &&
+                              "error" in data &&
+                              typeof (data as { error: unknown }).error === "string"
+                              ? (data as { error: string }).error
+                              : res.statusText;
+                          setDeleteError(message);
+                          return;
+                        }
+                        setBulkSelected([]);
+                        setDeleteConfirm(false);
+                        const listRes = await fetch("/api/mp3s");
+                        const listData: unknown = await listRes.json();
+                        if (!listRes.ok) return;
+                        const parsed = parseSongsResponse(listData);
+                        if (!parsed.ok) return;
+                        if (parsed.songs.length === 0) {
+                          setState({ status: "empty" });
+                        } else {
+                          setState({ status: "ready", songs: parsed.songs });
+                        }
+                      } catch (e) {
+                        setDeleteError(e instanceof Error ? e.message : String(e));
+                      } finally {
+                        setDeleteBusy(false);
+                      }
+                    }}
+                    className="rounded-md bg-red-700 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-800 disabled:opacity-50 dark:bg-red-600 dark:hover:bg-red-500"
+                  >
+                    {deleteBusy ? "Deleting…" : "Delete permanently"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+            {deleteError ? (
+              <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                {deleteError}
+              </p>
+            ) : null}
+            {!detail || detail.status === "loading" ? (
+              <p className="text-sm text-zinc-500">Loading…</p>
+            ) : detail.status === "error" ? (
+              <p className="text-sm text-red-600 dark:text-red-400">
+                {detail.message}
+              </p>
+            ) : (
+              <div className="text-sm">
+                <dl className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                  <DetailRow label="File" value={detail.data.filename} />
+                  <DetailRow
+                    label="Title"
+                    value={detail.data.title}
+                    suffix={
+                      detail.data.titleSource === "filename" ? (
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          {" "}
+                          · inferred from filename
+                        </span>
+                      ) : null
+                    }
+                  />
+                  <DetailRow
+                    label="Artist"
+                    value={detail.data.artist}
+                    suffix={
+                      detail.data.artistSource === "filename" ? (
+                        <span className="text-zinc-500 dark:text-zinc-400">
+                          {" "}
+                          · inferred from filename
+                        </span>
+                      ) : null
+                    }
+                  />
+                  <DetailRow label="Album" value={detail.data.album} />
+                  <DetailRow
+                    label="Setlists"
+                    value={
+                      detail.data.artistExcludedFromSetlists
+                        ? "Hidden by artist setting"
+                        : detail.data.excludedFromSetlists
                           ? "Hidden from add picker"
                           : "Visible in add picker"
+                    }
+                  />
+                </dl>
+                <details className="mt-3">
+                  <summary className="cursor-pointer text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100">
+                    More details
+                  </summary>
+                  <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
+                    <DetailRow
+                      label="Track #"
+                      value={
+                        detail.data.trackNumber != null
+                          ? String(detail.data.trackNumber)
+                          : null
                       }
                     />
+                    <DetailRow label="Genre" value={detail.data.genre} />
+                    <DetailRow label="Comments" value={detail.data.comments} />
+                    <DetailRow
+                      label="Year"
+                      value={
+                        detail.data.year != null ? String(detail.data.year) : null
+                      }
+                    />
+                    <DetailRow
+                      label="Duration"
+                      value={formatDuration(detail.data.durationSec)}
+                    />
+                    <DetailRow
+                      label="Bitrate"
+                      value={
+                        detail.data.bitrateKbps != null
+                          ? `${detail.data.bitrateKbps} kbps`
+                          : null
+                      }
+                    />
+                    <DetailRow label="Codec" value={detail.data.codec} />
+                    <DetailRow label="Size" value={formatBytes(detail.data.sizeBytes)} />
+                    <DetailRow
+                      label="Modified"
+                      value={new Date(detail.data.modified).toLocaleString()}
+                    />
                   </dl>
-                  <details className="mt-3">
-                    <summary className="cursor-pointer text-sm font-medium text-zinc-700 hover:text-zinc-900 dark:text-zinc-300 dark:hover:text-zinc-100">
-                      More details
-                    </summary>
-                    <dl className="mt-2 grid grid-cols-[auto_1fr] gap-x-4 gap-y-2">
-                      <DetailRow
-                        label="Track #"
-                        value={
-                          detail.data.trackNumber != null
-                            ? String(detail.data.trackNumber)
-                            : null
-                        }
-                      />
-                      <DetailRow label="Genre" value={detail.data.genre} />
-                      <DetailRow
-                        label="Comments"
-                        value={detail.data.comments}
-                      />
-                      <DetailRow
-                        label="Year"
-                        value={
-                          detail.data.year != null
-                            ? String(detail.data.year)
-                            : null
-                        }
-                      />
-                      <DetailRow
-                        label="Duration"
-                        value={formatDuration(detail.data.durationSec)}
-                      />
-                      <DetailRow
-                        label="Bitrate"
-                        value={
-                          detail.data.bitrateKbps != null
-                            ? `${detail.data.bitrateKbps} kbps`
-                            : null
-                        }
-                      />
-                      <DetailRow label="Codec" value={detail.data.codec} />
-                      <DetailRow
-                        label="Size"
-                        value={formatBytes(detail.data.sizeBytes)}
-                      />
-                      <DetailRow
-                        label="Modified"
-                        value={new Date(detail.data.modified).toLocaleString()}
-                      />
-                    </dl>
-                  </details>
-                </div>
-              )}
-            </div>
-          </>
-        )}
-      </aside>
+                </details>
+              </div>
+            )}
+          </div>
+        </aside>
+      ) : null}
     </div>
   );
 }
