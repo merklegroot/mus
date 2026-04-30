@@ -24,7 +24,8 @@ function ensureRuntimeMigrations(sqlite: InstanceType<typeof Database>): void {
     CREATE TABLE IF NOT EXISTS songs (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       created_at INTEGER NOT NULL,
-      updated_at INTEGER NOT NULL
+      updated_at INTEGER NOT NULL,
+      lyrics TEXT
     );
 
     CREATE TABLE IF NOT EXISTS song_files (
@@ -38,6 +39,13 @@ function ensureRuntimeMigrations(sqlite: InstanceType<typeof Database>): void {
     CREATE INDEX IF NOT EXISTS song_files_song_id_idx
       ON song_files(song_id);
   `);
+
+  const songColumns = sqlite
+    .prepare("PRAGMA table_info(songs)")
+    .all() as Array<{ name: string }>;
+  if (!songColumns.some((column) => column.name === "lyrics")) {
+    sqlite.exec("ALTER TABLE songs ADD COLUMN lyrics TEXT");
+  }
 
   const tracksTable = sqlite
     .prepare(

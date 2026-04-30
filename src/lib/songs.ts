@@ -82,6 +82,23 @@ export function listSongFilenames(songId: number): string[] {
     .filter((f) => typeof f === "string" && f.trim() !== "");
 }
 
+export function getSongLyrics(songId: number): string | null {
+  const sqlite = getSqliteDatabase();
+  const row = sqlite
+    .prepare("SELECT lyrics FROM songs WHERE id = ?")
+    .get(songId) as { lyrics?: unknown } | undefined;
+  const lyrics = row?.lyrics;
+  return typeof lyrics === "string" ? lyrics : null;
+}
+
+export function setSongLyrics(songId: number, lyrics: string | null): void {
+  const sqlite = getSqliteDatabase();
+  const now = Date.now();
+  sqlite
+    .prepare("UPDATE songs SET lyrics = ?, updated_at = ? WHERE id = ?")
+    .run(lyrics, now, songId);
+}
+
 export function songIdForFilename(filename: string): number | null {
   const sqlite = getSqliteDatabase();
   const trimmed = filename.trim();

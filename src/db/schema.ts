@@ -140,6 +140,7 @@ export const songs = sqliteTable("songs", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   createdAt: integer("created_at", { mode: "number" }).notNull(),
   updatedAt: integer("updated_at", { mode: "number" }).notNull(),
+  lyrics: text("lyrics"),
 });
 
 export type Song = typeof songs.$inferSelect;

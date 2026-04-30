@@ -8,6 +8,7 @@ type SongLookup = {
   songId: number;
   filenames: string[];
   primaryFilename: string | null;
+  lyrics?: string | null;
 };
 
 function isSongLookup(data: unknown): data is SongLookup {
@@ -16,7 +17,8 @@ function isSongLookup(data: unknown): data is SongLookup {
   return (
     typeof d.songId === "number" &&
     Array.isArray(d.filenames) &&
-    (d.primaryFilename === null || typeof d.primaryFilename === "string")
+    (d.primaryFilename === null || typeof d.primaryFilename === "string") &&
+    (d.lyrics === undefined || d.lyrics === null || typeof d.lyrics === "string")
   );
 }
 
@@ -110,6 +112,10 @@ export function SongDetailsPage({ songId }: { songId: string }) {
         primary: Mp3Details | null;
       }
   >({ status: "loading" });
+  const [lyricsDraft, setLyricsDraft] = useState("");
+  const [lyricsDirty, setLyricsDirty] = useState(false);
+  const [lyricsBusy, setLyricsBusy] = useState(false);
+  const [lyricsError, setLyricsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +123,10 @@ export function SongDetailsPage({ songId }: { songId: string }) {
 
     async function load() {
       setState({ status: "loading" });
+      setLyricsDraft("");
+      setLyricsDirty(false);
+      setLyricsBusy(false);
+      setLyricsError(null);
       try {
         const songRes = await fetch(`/api/songs/${encodeURIComponent(songId)}`, {
           signal: ac.signal,
@@ -138,6 +148,9 @@ export function SongDetailsPage({ songId }: { songId: string }) {
           setState({ status: "error", message: "Invalid response" });
           return;
         }
+
+        setLyricsDraft(songData.lyrics ?? "");
+        setLyricsDirty(false);
 
         const primaryFilename = songData.primaryFilename;
         if (!primaryFilename) {
@@ -184,6 +197,51 @@ export function SongDetailsPage({ songId }: { songId: string }) {
       ac.abort();
     };
   }, [songId]);
+
+  async function saveLyrics(): Promise<void> {
+    if (state.status !== "ready") return;
+    setLyricsBusy(true);
+    setLyricsError(null);
+    try {
+      const res = await fetch(`/api/songs/${encodeURIComponent(songId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lyrics: lyricsDraft }),
+      });
+      const data: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : res.statusText;
+        setLyricsError(message);
+        return;
+      }
+
+      const nextLyrics =
+        typeof data === "object" &&
+        data !== null &&
+        "lyrics" in data &&
+        (data as { lyrics?: unknown }).lyrics !== undefined
+          ? (data as { lyrics?: unknown }).lyrics
+          : null;
+      const normalized = typeof nextLyrics === "string" ? nextLyrics : "";
+      setLyricsDraft(normalized);
+      setLyricsDirty(false);
+      setState((prev) =>
+        prev.status === "ready"
+          ? { ...prev, song: { ...prev.song, lyrics: normalized } }
+          : prev,
+      );
+    } catch (err) {
+      setLyricsError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setLyricsBusy(false);
+    }
+  }
 
   const titleLine = useMemo(() => {
     if (state.status !== "ready") return null;
@@ -348,6 +406,47 @@ export function SongDetailsPage({ songId }: { songId: string }) {
             )}
           </>
         )}
+      </section>
+
+      <section className={`${panelClass} space-y-3`} aria-label="Lyrics">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+            Lyrics
+          </p>
+          <div className="flex items-center gap-2">
+            {lyricsDirty ? (
+              <span className="text-xs text-amber-700 dark:text-amber-300">
+                Unsaved changes
+              </span>
+            ) : null}
+            <button
+              type="button"
+              disabled={state.status !== "ready" || lyricsBusy || !lyricsDirty}
+              onClick={() => void saveLyrics()}
+              className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-950 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+            >
+              {lyricsBusy ? "Saving…" : "Save lyrics"}
+            </button>
+          </div>
+        </div>
+
+        <textarea
+          value={lyricsDraft}
+          onChange={(e) => {
+            setLyricsDraft(e.target.value);
+            setLyricsDirty(true);
+            setLyricsError(null);
+          }}
+          placeholder="Paste or type lyrics here…"
+          rows={10}
+          className="w-full resize-y rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+        />
+
+        {lyricsError ? (
+          <p className="text-sm text-red-700 dark:text-red-300">
+            {lyricsError}
+          </p>
+        ) : null}
       </section>
     </main>
   );
