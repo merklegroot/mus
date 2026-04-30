@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { AlbumList } from "@/components/AlbumList";
+import { usePlayer } from "@/components/player/PlayerContext";
 import { ArtistList } from "@/components/ArtistList";
 import { InferFromFilenamePanel } from "@/components/InferFromFilenamePanel";
 import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
@@ -207,6 +208,7 @@ function isMp3Details(data: unknown): data is Mp3Details {
 }
 
 export function MusicLibraryControl() {
+  const { playNow, addToQueue } = usePlayer();
   const [state, setState] = useState<MusicLibraryControlState>({
     status: "loading",
   });
@@ -1082,16 +1084,21 @@ export function MusicLibraryControl() {
               </button>
             </div>
           </div>
-          <div className="mb-4 min-w-0 shrink-0 overflow-x-auto">
-            <audio
-              key={selected}
-              controls
-              preload="metadata"
-              className="block h-10 w-full max-w-full accent-zinc-900 dark:accent-zinc-100"
-              src={`/api/mp3s/${encodeURIComponent(selected)}/stream`}
+          <div className="mb-4 flex min-w-0 shrink-0 flex-wrap gap-2">
+            <button
+              type="button"
+              onClick={() => playNow(selected)}
+              className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-950 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
             >
-              Your browser does not support the audio element.
-            </audio>
+              Play in player
+            </button>
+            <button
+              type="button"
+              onClick={() => addToQueue(selected)}
+              className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-200 dark:hover:bg-zinc-800"
+            >
+              Add to queue
+            </button>
           </div>
           <div className="min-h-0 flex-1 overflow-y-auto">
             <InferFromFilenamePanel

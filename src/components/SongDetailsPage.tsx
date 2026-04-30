@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { usePlayer } from "@/components/player/PlayerContext";
 
 type SongLookup = {
   songId: number;
@@ -103,6 +104,7 @@ function DetailRow({
 }
 
 export function SongDetailsPage({ songId }: { songId: string }) {
+  const { playNow, addToQueue } = usePlayer();
   const [state, setState] = useState<
     | { status: "loading" }
     | { status: "error"; message: string }
@@ -312,16 +314,21 @@ export function SongDetailsPage({ songId }: { songId: string }) {
 
             {state.primary ? (
               <>
-                <div className="min-w-0 overflow-x-auto">
-                  <audio
-                    key={state.primary.filename}
-                    controls
-                    preload="metadata"
-                    className="block h-10 w-full max-w-full accent-zinc-900 dark:accent-zinc-100"
-                    src={`/api/mp3s/${encodeURIComponent(state.primary.filename)}/stream`}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => playNow(state.primary!.filename)}
+                    className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
                   >
-                    Your browser does not support the audio element.
-                  </audio>
+                    Play in player
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => addToQueue(state.primary!.filename)}
+                    className="rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm font-medium text-zinc-800 hover:bg-zinc-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+                  >
+                    Add to queue
+                  </button>
                 </div>
 
                 <div className="text-sm">

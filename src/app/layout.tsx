@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { PlayerShell } from "@/components/PlayerShell";
 import { TopNav } from "@/components/TopNav";
 import "./globals.css";
 
@@ -30,7 +31,7 @@ export default function RootLayout({
     >
       <body className="flex min-h-full flex-col pt-14 font-sans">
         <TopNav />
-        {children}
+        <PlayerShell>{children}</PlayerShell>
       </body>
     </html>
   );
