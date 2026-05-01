@@ -53,6 +53,24 @@ function ExpandIcon({ className }: { className?: string }) {
   );
 }
 
+function RemoveFromQueueIcon({ className }: { className?: string }) {
+  return (
+    <svg
+      viewBox="0 0 20 20"
+      fill="none"
+      aria-hidden="true"
+      className={className}
+    >
+      <path
+        d="M6 6l8 8M14 6l-8 8"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeWidth="1.75"
+      />
+    </svg>
+  );
+}
+
 export function PlayerDock() {
   const {
     playingFilename,
@@ -67,6 +85,7 @@ export function PlayerDock() {
     closePlayer,
     showPlayer,
     playQueuedNow,
+    removeFromQueue,
   } = usePlayer();
 
   const showExpandedPlayerDock = Boolean(playingFilename && isPlayerVisible);
@@ -98,9 +117,9 @@ export function PlayerDock() {
                   {isPlayerPlaying ? "Now playing" : "In player"}
                 </span>
               </li>
-              {queueFilenames.slice(0, 4).map((filename, index) => (
+              {queueFilenames.map((filename, index) => (
                 <li
-                  key={`${filename}:${index}`}
+                  key={`queued:${index}:${filename}`}
                   className="flex min-w-0 items-center gap-2"
                 >
                   <span className="shrink-0 text-amber-700 dark:text-amber-300">
@@ -109,25 +128,31 @@ export function PlayerDock() {
                   <span className="min-w-0 flex-1 truncate font-medium text-zinc-950 dark:text-zinc-50">
                     {filename}
                   </span>
-                  {index === 0 ? (
+                  <span className="inline-flex shrink-0 items-center gap-0.5">
+                    {index === 0 ? (
+                      <button
+                        type="button"
+                        onClick={() => playQueuedNow(index)}
+                        aria-label="Play now"
+                        title="Play now"
+                        className="inline-flex size-6 items-center justify-center rounded-md bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                      >
+                        <PlayIcon className="size-3.5" />
+                      </button>
+                    ) : null}
                     <button
                       type="button"
-                      onClick={() => playQueuedNow(index)}
-                      aria-label="Play now"
-                      title="Play now"
-                      className="inline-flex size-6 shrink-0 items-center justify-center rounded-md bg-zinc-950 text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                      onClick={() => removeFromQueue(index)}
+                      aria-label={`Remove ${filename} from queue`}
+                      title="Remove from queue"
+                      className="inline-flex size-6 items-center justify-center rounded-md border border-zinc-300 text-zinc-600 hover:border-red-400 hover:bg-red-50 hover:text-red-700 dark:border-zinc-600 dark:text-zinc-300 dark:hover:border-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-300"
                     >
-                      <PlayIcon className="size-3.5" />
+                      <RemoveFromQueueIcon className="size-3.5" />
                     </button>
-                  ) : null}
+                  </span>
                 </li>
               ))}
             </ol>
-            {queueFilenames.length > 4 ? (
-              <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
-                +{queueFilenames.length - 4} more
-              </p>
-            ) : null}
           </div>
           <audio
             ref={audioRef}

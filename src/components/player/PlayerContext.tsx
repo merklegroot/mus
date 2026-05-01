@@ -21,6 +21,7 @@ export type PlayerActions = {
   togglePlayback: (filename: string) => void;
   addToQueue: (filename: string) => void;
   playQueuedNow: (index: number) => void;
+  removeFromQueue: (index: number) => void;
   showPlayer: () => void;
   closePlayer: () => void;
 };
@@ -119,6 +120,10 @@ export function PlayerProvider({
     });
   }
 
+  function removeFromQueue(index: number) {
+    setQueueFilenames((prev) => prev.filter((_, i) => i !== index));
+  }
+
   const showExpandedPlayerDock = Boolean(playingFilename && isPlayerVisible);
   const showCollapsedPlayerDock =
     !showExpandedPlayerDock && (playingFilename !== null || queueFilenames.length > 0);
@@ -139,6 +144,7 @@ export function PlayerProvider({
       togglePlayback,
       addToQueue,
       playQueuedNow,
+      removeFromQueue,
       showPlayer,
       closePlayer,
       audioRef,
