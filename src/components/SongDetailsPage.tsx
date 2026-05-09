@@ -4,6 +4,11 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlayer } from "@/components/player/PlayerContext";
+import {
+  shortestSemitoneStepsBetweenKeys,
+  transposeBothKeysParseable,
+  transposeKeyLabelBySteps,
+} from "@/lib/transposeKeySteps";
 
 type SongLookup = {
   songId: number;
@@ -91,6 +96,15 @@ function formatKeyMatchStrength(pearson: number): string {
   return `${pct}%`;
 }
 
+/** Integer semitones from the steps field, or null if empty/invalid. */
+function parseTransposeStepsInput(raw: string): number | null {
+  const t = raw.trim();
+  if (t === "") return null;
+  const n = Number(t);
+  if (!Number.isFinite(n)) return null;
+  return Math.round(n);
+}
+
 function DetailRow({
   label,
   value,
@@ -136,6 +150,8 @@ export function SongDetailsPage({ songId }: { songId: string }) {
   const transposeDialogRef = useRef<HTMLDialogElement | null>(null);
   const [transposeDialogOpen, setTransposeDialogOpen] = useState(false);
   const [transposeSteps, setTransposeSteps] = useState("0");
+  const [transposeSourceKey, setTransposeSourceKey] = useState("");
+  const [transposeDestKey, setTransposeDestKey] = useState("");
   const [transposeStepsError, setTransposeStepsError] = useState<string | null>(
     null,
   );
@@ -150,6 +166,45 @@ export function SongDetailsPage({ songId }: { songId: string }) {
     key: string;
     confidence: number;
   } | null>(null);
+
+  const transposeKeyDelta = useMemo(() => {
+    if (!transposeSourceKey.trim() || !transposeDestKey.trim()) return null;
+    return shortestSemitoneStepsBetweenKeys(
+      transposeSourceKey,
+      transposeDestKey,
+    );
+  }, [transposeSourceKey, transposeDestKey]);
+
+  function handleTransposeSourceChange(value: string): void {
+    setTransposeSourceKey(value);
+    setTransposeStepsError(null);
+    setTransposeNotImplementedMessage(null);
+    if (!transposeBothKeysParseable(value, transposeDestKey)) return;
+    const delta = shortestSemitoneStepsBetweenKeys(value, transposeDestKey);
+    if (delta !== null) setTransposeSteps(String(delta));
+  }
+
+  function handleTransposeDestChange(value: string): void {
+    setTransposeDestKey(value);
+    setTransposeStepsError(null);
+    setTransposeNotImplementedMessage(null);
+    if (!transposeBothKeysParseable(transposeSourceKey, value)) return;
+    const delta = shortestSemitoneStepsBetweenKeys(transposeSourceKey, value);
+    if (delta !== null) setTransposeSteps(String(delta));
+  }
+
+  function handleTransposeStepsChange(value: string): void {
+    setTransposeSteps(value);
+    setTransposeStepsError(null);
+    setTransposeNotImplementedMessage(null);
+    if (!transposeBothKeysParseable(transposeSourceKey, transposeDestKey)) {
+      return;
+    }
+    const steps = parseTransposeStepsInput(value);
+    if (steps === null) return;
+    const newDest = transposeKeyLabelBySteps(transposeSourceKey, steps);
+    if (newDest !== null) setTransposeDestKey(newDest);
+  }
 
   useEffect(() => {
     const dialog = transposeDialogRef.current;
@@ -671,6 +726,17 @@ export function SongDetailsPage({ songId }: { songId: string }) {
                 setTransposeSteps("0");
                 setTransposeStepsError(null);
                 setTransposeNotImplementedMessage(null);
+                setTransposeDestKey("");
+                if (state.status === "ready") {
+                  const k = state.song.key;
+                  setTransposeSourceKey(
+                    k != null && typeof k === "string" && k.trim() !== ""
+                      ? k.trim()
+                      : "",
+                  );
+                } else {
+                  setTransposeSourceKey("");
+                }
                 setTransposeDialogOpen(true);
               }}
               className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
@@ -731,7 +797,7 @@ export function SongDetailsPage({ songId }: { songId: string }) {
               (e.currentTarget as HTMLDialogElement).close();
             }
           }}
-          className="fixed left-1/2 top-1/2 w-[min(24rem,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+          className="fixed left-1/2 top-1/2 w-[min(30rem,92vw)] max-h-[85vh] overflow-y-auto -translate-x-1/2 -translate-y-1/2 rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
         >
           <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
             <div className="min-w-0">
@@ -739,7 +805,13 @@ export function SongDetailsPage({ songId }: { songId: string }) {
                 Transpose song
               </h2>
               <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                Shift chords by a number of steps (positive or negative).
+                Use semitone steps and/or source and destination keys. While{" "}
+                <strong className="font-medium text-zinc-700 dark:text-zinc-300">
+                  both
+                </strong>{" "}
+                keys are valid, source, destination, and steps stay linked. With
+                only one key filled, steps are independent.{" "}
+                {"The song's saved key fills source when you open this dialog if it is set."}
               </p>
             </div>
             <form method="dialog">
@@ -755,26 +827,77 @@ export function SongDetailsPage({ songId }: { songId: string }) {
 
           <div className="space-y-4 px-5 py-4">
             <div className="space-y-1.5">
-              <label
-                htmlFor="transpose-steps"
-                className="text-sm font-medium text-zinc-800 dark:text-zinc-200"
-              >
-                Steps
-              </label>
-              <input
-                id="transpose-steps"
-                type="number"
-                inputMode="numeric"
-                value={transposeSteps}
-                onChange={(e) => {
-                  setTransposeSteps(e.target.value);
-                  setTransposeStepsError(null);
-                  setTransposeNotImplementedMessage(null);
-                }}
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
-              />
+              <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                By key
+              </p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="transpose-source-key"
+                    className="text-sm font-medium text-zinc-800 dark:text-zinc-200"
+                  >
+                    Source key
+                  </label>
+                  <input
+                    id="transpose-source-key"
+                    type="text"
+                    value={transposeSourceKey}
+                    onChange={(e) => handleTransposeSourceChange(e.target.value)}
+                    placeholder="e.g. Am"
+                    autoComplete="off"
+                    className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label
+                    htmlFor="transpose-dest-key"
+                    className="text-sm font-medium text-zinc-800 dark:text-zinc-200"
+                  >
+                    Destination key
+                  </label>
+                  <input
+                    id="transpose-dest-key"
+                    type="text"
+                    value={transposeDestKey}
+                    onChange={(e) => handleTransposeDestChange(e.target.value)}
+                    placeholder="e.g. Dm"
+                    autoComplete="off"
+                    className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </div>
+              </div>
+              {transposeSourceKey.trim() !== "" &&
+              transposeDestKey.trim() !== "" &&
+              transposeKeyDelta === null ? (
+                <p className="text-xs text-amber-800 dark:text-amber-200">
+                  Could not parse one or both keys. Use roots like C, F#, Bb,
+                  Am…
+                </p>
+              ) : null}
+            </div>
+
+            <div className="border-t border-zinc-200 pt-4 dark:border-zinc-800">
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+                  By steps
+                </p>
+                <label
+                  htmlFor="transpose-steps"
+                  className="text-sm font-medium text-zinc-800 dark:text-zinc-200"
+                >
+                  Semitone steps
+                </label>
+                <input
+                  id="transpose-steps"
+                  type="number"
+                  inputMode="numeric"
+                  value={transposeSteps}
+                  onChange={(e) => handleTransposeStepsChange(e.target.value)}
+                  className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                />
+              </div>
               {transposeStepsError ? (
-                <p className="text-sm text-red-700 dark:text-red-300">
+                <p className="mt-2 text-sm text-red-700 dark:text-red-300">
                   {transposeStepsError}
                 </p>
               ) : null}
@@ -790,9 +913,27 @@ export function SongDetailsPage({ songId }: { songId: string }) {
               <button
                 type="button"
                 onClick={() => {
+                  const src = transposeSourceKey.trim();
+                  const dst = transposeDestKey.trim();
+                  if (src !== "" && dst !== "") {
+                    const delta = shortestSemitoneStepsBetweenKeys(src, dst);
+                    if (delta === null) {
+                      setTransposeStepsError(
+                        "Could not parse source or destination key.",
+                      );
+                      setTransposeNotImplementedMessage(null);
+                      return;
+                    }
+                    setTransposeStepsError(null);
+                    setTransposeNotImplementedMessage("Not implemented yet.");
+                    return;
+                  }
+
                   const trimmed = transposeSteps.trim();
                   if (trimmed === "" || Number.isNaN(Number(trimmed))) {
-                    setTransposeStepsError("Enter a valid number of steps.");
+                    setTransposeStepsError(
+                      "Enter a valid number of steps, or both source and destination keys.",
+                    );
                     setTransposeNotImplementedMessage(null);
                     return;
                   }
