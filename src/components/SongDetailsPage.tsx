@@ -155,8 +155,18 @@ export function SongDetailsPage({ songId }: { songId: string }) {
   const [transposeStepsError, setTransposeStepsError] = useState<string | null>(
     null,
   );
-  const [transposeNotImplementedMessage, setTransposeNotImplementedMessage] =
-    useState<string | null>(null);
+  const [transposeApplyBusy, setTransposeApplyBusy] = useState(false);
+  const [transposeApplyOkText, setTransposeApplyOkText] = useState<string | null>(
+    null,
+  );
+  const [transposeApplyErrText, setTransposeApplyErrText] = useState<
+    string | null
+  >(null);
+
+  function clearTransposeApplyFeedback(): void {
+    setTransposeApplyOkText(null);
+    setTransposeApplyErrText(null);
+  }
 
   const keyDialogRef = useRef<HTMLDialogElement | null>(null);
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
@@ -178,7 +188,7 @@ export function SongDetailsPage({ songId }: { songId: string }) {
   function handleTransposeSourceChange(value: string): void {
     setTransposeSourceKey(value);
     setTransposeStepsError(null);
-    setTransposeNotImplementedMessage(null);
+    clearTransposeApplyFeedback();
     if (!transposeBothKeysParseable(value, transposeDestKey)) return;
     const delta = shortestSemitoneStepsBetweenKeys(value, transposeDestKey);
     if (delta !== null) setTransposeSteps(String(delta));
@@ -187,7 +197,7 @@ export function SongDetailsPage({ songId }: { songId: string }) {
   function handleTransposeDestChange(value: string): void {
     setTransposeDestKey(value);
     setTransposeStepsError(null);
-    setTransposeNotImplementedMessage(null);
+    clearTransposeApplyFeedback();
     if (!transposeBothKeysParseable(transposeSourceKey, value)) return;
     const delta = shortestSemitoneStepsBetweenKeys(transposeSourceKey, value);
     if (delta !== null) setTransposeSteps(String(delta));
@@ -196,7 +206,7 @@ export function SongDetailsPage({ songId }: { songId: string }) {
   function handleTransposeStepsChange(value: string): void {
     setTransposeSteps(value);
     setTransposeStepsError(null);
-    setTransposeNotImplementedMessage(null);
+    clearTransposeApplyFeedback();
     if (!transposeBothKeysParseable(transposeSourceKey, transposeDestKey)) {
       return;
     }
@@ -204,6 +214,114 @@ export function SongDetailsPage({ songId }: { songId: string }) {
     if (steps === null) return;
     const newDest = transposeKeyLabelBySteps(transposeSourceKey, steps);
     if (newDest !== null) setTransposeDestKey(newDest);
+  }
+
+  async function applyTranspose(): Promise<void> {
+    const src = transposeSourceKey.trim();
+    const dst = transposeDestKey.trim();
+    let semitones: number;
+    let destinationKeyLabel: string | undefined;
+
+    if (src !== "" && dst !== "") {
+      const delta = shortestSemitoneStepsBetweenKeys(src, dst);
+      if (delta === null) {
+        setTransposeStepsError("Could not parse source or destination key.");
+        clearTransposeApplyFeedback();
+        return;
+      }
+      if (delta === 0) {
+        setTransposeStepsError(
+          "Source and destination keys match; nothing to transpose.",
+        );
+        clearTransposeApplyFeedback();
+        return;
+      }
+      semitones = delta;
+      destinationKeyLabel = dst;
+    } else {
+      const trimmed = transposeSteps.trim();
+      if (trimmed === "" || Number.isNaN(Number(trimmed))) {
+        setTransposeStepsError(
+          "Enter a valid number of steps, or both source and destination keys.",
+        );
+        clearTransposeApplyFeedback();
+        return;
+      }
+      semitones = Math.round(Number(trimmed));
+      if (semitones === 0) {
+        setTransposeStepsError("Enter a non-zero number of semitone steps.");
+        clearTransposeApplyFeedback();
+        return;
+      }
+      destinationKeyLabel = undefined;
+    }
+
+    setTransposeApplyBusy(true);
+    setTransposeStepsError(null);
+    clearTransposeApplyFeedback();
+    try {
+      const payload: { semitones: number; destinationKeyLabel?: string } = {
+        semitones,
+      };
+      if (destinationKeyLabel !== undefined) {
+        payload.destinationKeyLabel = destinationKeyLabel;
+      }
+      const res = await fetch(
+        `/api/songs/${encodeURIComponent(songId)}/transpose`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        },
+      );
+      const data: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : res.statusText;
+        setTransposeApplyErrText(message);
+        return;
+      }
+      const fn =
+        typeof data === "object" &&
+        data !== null &&
+        "outputFilename" in data &&
+        typeof (data as { outputFilename: unknown }).outputFilename ===
+          "string"
+          ? (data as { outputFilename: string }).outputFilename
+          : "";
+      const nt =
+        typeof data === "object" &&
+        data !== null &&
+        "newTitle" in data &&
+        typeof (data as { newTitle: unknown }).newTitle === "string"
+          ? (data as { newTitle: string }).newTitle
+          : "";
+      setTransposeApplyOkText(
+        fn
+          ? `Created "${fn}". ID3 title: ${nt}.`
+          : "Transpose finished.",
+      );
+      setState((prev) => {
+        if (prev.status !== "ready" || !fn) return prev;
+        const names = [...prev.song.filenames];
+        if (!names.includes(fn)) names.push(fn);
+        names.sort((a, b) =>
+          a.localeCompare(b, undefined, { sensitivity: "base" }),
+        );
+        return { ...prev, song: { ...prev.song, filenames: names } };
+      });
+    } catch (err) {
+      setTransposeApplyErrText(
+        err instanceof Error ? err.message : String(err),
+      );
+    } finally {
+      setTransposeApplyBusy(false);
+    }
   }
 
   useEffect(() => {
@@ -721,11 +839,13 @@ export function SongDetailsPage({ songId }: { songId: string }) {
             ) : null}
             <button
               type="button"
-              disabled={state.status !== "ready"}
+              disabled={
+                state.status !== "ready" || state.song.filenames.length === 0
+              }
               onClick={() => {
                 setTransposeSteps("0");
                 setTransposeStepsError(null);
-                setTransposeNotImplementedMessage(null);
+                clearTransposeApplyFeedback();
                 setTransposeDestKey("");
                 if (state.status === "ready") {
                   const k = state.song.key;
@@ -791,7 +911,11 @@ export function SongDetailsPage({ songId }: { songId: string }) {
       {transposeDialogOpen ? (
         <dialog
           ref={transposeDialogRef}
-          onClose={() => setTransposeDialogOpen(false)}
+          onClose={() => {
+            setTransposeDialogOpen(false);
+            clearTransposeApplyFeedback();
+            setTransposeApplyBusy(false);
+          }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               (e.currentTarget as HTMLDialogElement).close();
@@ -805,12 +929,14 @@ export function SongDetailsPage({ songId }: { songId: string }) {
                 Transpose song
               </h2>
               <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                Use semitone steps and/or source and destination keys. While{" "}
+                Creates a new MP3 next to the original (same tempo; pitch shifted)
+                using ffmpeg on the server. Use semitone steps and/or keys.
+                While{" "}
                 <strong className="font-medium text-zinc-700 dark:text-zinc-300">
                   both
                 </strong>{" "}
-                keys are valid, source, destination, and steps stay linked. With
-                only one key filled, steps are independent.{" "}
+                keys are valid, fields stay linked; with only one key, steps are
+                independent.{" "}
                 {"The song's saved key fills source when you open this dialog if it is set."}
               </p>
             </div>
@@ -903,46 +1029,29 @@ export function SongDetailsPage({ songId }: { songId: string }) {
               ) : null}
             </div>
 
-            {transposeNotImplementedMessage ? (
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                {transposeNotImplementedMessage}
+            {transposeApplyOkText ? (
+              <p className="text-sm text-emerald-800 dark:text-emerald-200">
+                {transposeApplyOkText}
+              </p>
+            ) : null}
+            {transposeApplyErrText ? (
+              <p className="text-sm text-red-700 dark:text-red-300">
+                {transposeApplyErrText}
               </p>
             ) : null}
 
             <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
               <button
                 type="button"
-                onClick={() => {
-                  const src = transposeSourceKey.trim();
-                  const dst = transposeDestKey.trim();
-                  if (src !== "" && dst !== "") {
-                    const delta = shortestSemitoneStepsBetweenKeys(src, dst);
-                    if (delta === null) {
-                      setTransposeStepsError(
-                        "Could not parse source or destination key.",
-                      );
-                      setTransposeNotImplementedMessage(null);
-                      return;
-                    }
-                    setTransposeStepsError(null);
-                    setTransposeNotImplementedMessage("Not implemented yet.");
-                    return;
-                  }
-
-                  const trimmed = transposeSteps.trim();
-                  if (trimmed === "" || Number.isNaN(Number(trimmed))) {
-                    setTransposeStepsError(
-                      "Enter a valid number of steps, or both source and destination keys.",
-                    );
-                    setTransposeNotImplementedMessage(null);
-                    return;
-                  }
-                  setTransposeStepsError(null);
-                  setTransposeNotImplementedMessage("Not implemented yet.");
-                }}
-                className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                disabled={
+                  transposeApplyBusy ||
+                  state.status !== "ready" ||
+                  state.song.filenames.length === 0
+                }
+                onClick={() => void applyTranspose()}
+                className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
               >
-                Apply transpose
+                {transposeApplyBusy ? "Working…" : "Apply transpose"}
               </button>
             </div>
           </div>

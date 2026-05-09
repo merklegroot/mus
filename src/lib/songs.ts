@@ -129,3 +129,24 @@ export function songIdForFilename(filename: string): number | null {
   return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
+/** Attach an existing library filename to a song (second track for same song). */
+export function linkSongFileToSong(songId: number, filename: string): void {
+  const sqlite = getSqliteDatabase();
+  const trimmed = filename.trim();
+  if (!trimmed) throw new Error("Filename is required");
+
+  const taken = sqlite
+    .prepare("SELECT song_id AS songId FROM song_files WHERE filename = ?")
+    .get(trimmed) as { songId?: number } | undefined;
+  if (taken?.songId != null) {
+    throw new Error("That filename is already linked in the library");
+  }
+
+  const now = Date.now();
+  sqlite
+    .prepare(
+      "INSERT INTO song_files (filename, song_id, added_at, updated_at) VALUES (?, ?, ?, ?)",
+    )
+    .run(trimmed, songId, now, now);
+}
+
