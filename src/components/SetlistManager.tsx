@@ -347,6 +347,19 @@ export function SetlistManager() {
     return map;
   }, [songs]);
 
+  const selectedTrackDisplay = useMemo(() => {
+    if (!selectedTrack) return null;
+    const meta = songByFilename.get(selectedTrack.filename);
+    const { primary, secondary } = meta
+      ? songListPrimarySecondary(meta)
+      : { primary: selectedTrack.filename, secondary: null };
+    const hasTitleLine =
+      !!meta &&
+      typeof meta.title === "string" &&
+      meta.title.trim() !== "";
+    return { primary, secondary, hasTitleLine };
+  }, [selectedTrack, songByFilename]);
+
   useEffect(() => {
     if (!selectedSongFilename) {
       setSongKeyDraft("");
@@ -1154,9 +1167,21 @@ export function SetlistManager() {
                       }}
                     >
                       <div>
-                        <p className="break-all text-sm font-semibold text-zinc-950 dark:text-zinc-50">
-                          {selectedTrack.filename}
+                        <p
+                          className={`block ${
+                            selectedTrackDisplay?.hasTitleLine
+                              ? "truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50"
+                              : "break-all text-sm font-normal text-zinc-900 dark:text-zinc-100"
+                          }`}
+                          title={selectedTrack.filename}
+                        >
+                          {selectedTrackDisplay?.primary ?? selectedTrack.filename}
                         </p>
+                        {selectedTrackDisplay?.secondary ? (
+                          <p className="mt-0.5 truncate text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                            {selectedTrackDisplay.secondary}
+                          </p>
+                        ) : null}
                         <div className="mt-2 flex flex-wrap items-center gap-2">
                           {songIdByFilename.get(selectedTrack.filename) ? (
                             <Link
