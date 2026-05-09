@@ -141,6 +141,8 @@ export const songs = sqliteTable("songs", {
   createdAt: integer("created_at", { mode: "number" }).notNull(),
   updatedAt: integer("updated_at", { mode: "number" }).notNull(),
   lyrics: text("lyrics"),
+  /** Musical key (e.g. "C", "Am"); null when not set. */
+  musicalKey: text("musical_key"),
 });
 
 export type Song = typeof songs.$inferSelect;

@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import type { ReactNode } from "react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlayer } from "@/components/player/PlayerContext";
 
 type SongLookup = {
@@ -10,6 +10,8 @@ type SongLookup = {
   filenames: string[];
   primaryFilename: string | null;
   lyrics?: string | null;
+  /** Musical key when set in the database */
+  key?: string | null;
 };
 
 function isSongLookup(data: unknown): data is SongLookup {
@@ -19,7 +21,8 @@ function isSongLookup(data: unknown): data is SongLookup {
     typeof d.songId === "number" &&
     Array.isArray(d.filenames) &&
     (d.primaryFilename === null || typeof d.primaryFilename === "string") &&
-    (d.lyrics === undefined || d.lyrics === null || typeof d.lyrics === "string")
+    (d.lyrics === undefined || d.lyrics === null || typeof d.lyrics === "string") &&
+    (d.key === undefined || d.key === null || typeof d.key === "string")
   );
 }
 
@@ -119,6 +122,47 @@ export function SongDetailsPage({ songId }: { songId: string }) {
   const [lyricsBusy, setLyricsBusy] = useState(false);
   const [lyricsError, setLyricsError] = useState<string | null>(null);
 
+  const [keyDraft, setKeyDraft] = useState("");
+  const [keyDirty, setKeyDirty] = useState(false);
+  const [keyBusy, setKeyBusy] = useState(false);
+  const [keyError, setKeyError] = useState<string | null>(null);
+
+  const transposeDialogRef = useRef<HTMLDialogElement | null>(null);
+  const [transposeDialogOpen, setTransposeDialogOpen] = useState(false);
+  const [transposeSteps, setTransposeSteps] = useState("0");
+  const [transposeStepsError, setTransposeStepsError] = useState<string | null>(
+    null,
+  );
+  const [transposeNotImplementedMessage, setTransposeNotImplementedMessage] =
+    useState<string | null>(null);
+
+  const keyDialogRef = useRef<HTMLDialogElement | null>(null);
+  const [keyDialogOpen, setKeyDialogOpen] = useState(false);
+  const [keyDetectNotImplementedMessage, setKeyDetectNotImplementedMessage] =
+    useState<string | null>(null);
+
+  useEffect(() => {
+    const dialog = transposeDialogRef.current;
+    if (!transposeDialogOpen || !dialog) return;
+    if (dialog.open) return;
+    try {
+      dialog.showModal();
+    } catch {
+      // ignore
+    }
+  }, [transposeDialogOpen]);
+
+  useEffect(() => {
+    const dialog = keyDialogRef.current;
+    if (!keyDialogOpen || !dialog) return;
+    if (dialog.open) return;
+    try {
+      dialog.showModal();
+    } catch {
+      // ignore
+    }
+  }, [keyDialogOpen]);
+
   useEffect(() => {
     let cancelled = false;
     const ac = new AbortController();
@@ -129,6 +173,10 @@ export function SongDetailsPage({ songId }: { songId: string }) {
       setLyricsDirty(false);
       setLyricsBusy(false);
       setLyricsError(null);
+      setKeyDraft("");
+      setKeyDirty(false);
+      setKeyBusy(false);
+      setKeyError(null);
       try {
         const songRes = await fetch(`/api/songs/${encodeURIComponent(songId)}`, {
           signal: ac.signal,
@@ -153,6 +201,8 @@ export function SongDetailsPage({ songId }: { songId: string }) {
 
         setLyricsDraft(songData.lyrics ?? "");
         setLyricsDirty(false);
+        setKeyDraft(songData.key ?? "");
+        setKeyDirty(false);
 
         const primaryFilename = songData.primaryFilename;
         if (!primaryFilename) {
@@ -233,15 +283,86 @@ export function SongDetailsPage({ songId }: { songId: string }) {
       const normalized = typeof nextLyrics === "string" ? nextLyrics : "";
       setLyricsDraft(normalized);
       setLyricsDirty(false);
-      setState((prev) =>
-        prev.status === "ready"
-          ? { ...prev, song: { ...prev.song, lyrics: normalized } }
-          : prev,
-      );
+
+      let mergedKey: string | null | undefined;
+      if (typeof data === "object" && data !== null && "key" in data) {
+        const k = (data as { key: unknown }).key;
+        mergedKey =
+          k === null ? null : typeof k === "string" ? k : undefined;
+        if (mergedKey !== undefined) {
+          setKeyDraft(mergedKey === null ? "" : mergedKey);
+          setKeyDirty(false);
+        }
+      }
+
+      setState((prev) => {
+        if (prev.status !== "ready") return prev;
+        const song = { ...prev.song, lyrics: normalized };
+        if (mergedKey !== undefined) {
+          song.key = mergedKey;
+        }
+        return { ...prev, song };
+      });
     } catch (err) {
       setLyricsError(err instanceof Error ? err.message : String(err));
     } finally {
       setLyricsBusy(false);
+    }
+  }
+
+  async function saveKey(): Promise<void> {
+    if (state.status !== "ready") return;
+    setKeyBusy(true);
+    setKeyError(null);
+    try {
+      const trimmed = keyDraft.trim();
+      const res = await fetch(`/api/songs/${encodeURIComponent(songId)}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key: trimmed === "" ? null : trimmed }),
+      });
+      const data: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : res.statusText;
+        setKeyError(message);
+        return;
+      }
+
+      const nextKey =
+        typeof data === "object" &&
+        data !== null &&
+        "key" in data &&
+        (data as { key?: unknown }).key !== undefined
+          ? (data as { key: unknown }).key
+          : null;
+
+      if (nextKey === null) {
+        setKeyDraft("");
+      } else if (typeof nextKey === "string") {
+        setKeyDraft(nextKey);
+      }
+      setKeyDirty(false);
+
+      setState((prev) => {
+        if (prev.status !== "ready") return prev;
+        const song = { ...prev.song };
+        if (nextKey === null) {
+          song.key = null;
+        } else if (typeof nextKey === "string") {
+          song.key = nextKey;
+        }
+        return { ...prev, song };
+      });
+    } catch (err) {
+      setKeyError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setKeyBusy(false);
     }
   }
 
@@ -280,6 +401,51 @@ export function SongDetailsPage({ songId }: { songId: string }) {
                 </span>
               ) : null}
             </p>
+          ) : null}
+          {state.status === "ready" ? (
+            <div className="mt-2 space-y-2">
+              <div className="flex flex-wrap items-end gap-2">
+                <div className="min-w-[12rem] flex-1">
+                  <label
+                    htmlFor="song-key"
+                    className="text-xs font-medium text-zinc-500 dark:text-zinc-400"
+                  >
+                    Key
+                  </label>
+                  <input
+                    id="song-key"
+                    type="text"
+                    value={keyDraft}
+                    onChange={(e) => {
+                      setKeyDraft(e.target.value);
+                      setKeyDirty(true);
+                      setKeyError(null);
+                    }}
+                    placeholder="e.g. C, Am"
+                    autoComplete="off"
+                    className="mt-1 w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 placeholder:text-zinc-400 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+                  />
+                </div>
+                <button
+                  type="button"
+                  disabled={!keyDirty || keyBusy}
+                  onClick={() => void saveKey()}
+                  className="rounded-md bg-zinc-900 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-950 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
+                >
+                  {keyBusy ? "Saving…" : "Save key"}
+                </button>
+              </div>
+              {keyDirty ? (
+                <p className="text-xs text-amber-700 dark:text-amber-300">
+                  Unsaved changes
+                </p>
+              ) : null}
+              {keyError ? (
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  {keyError}
+                </p>
+              ) : null}
+            </div>
           ) : null}
           <p className="mt-2 break-all text-xs text-zinc-500 dark:text-zinc-400">
             Song id: {songId}
@@ -428,6 +594,30 @@ export function SongDetailsPage({ songId }: { songId: string }) {
             ) : null}
             <button
               type="button"
+              disabled={state.status !== "ready"}
+              onClick={() => {
+                setTransposeSteps("0");
+                setTransposeStepsError(null);
+                setTransposeNotImplementedMessage(null);
+                setTransposeDialogOpen(true);
+              }}
+              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            >
+              Transpose
+            </button>
+            <button
+              type="button"
+              disabled={state.status !== "ready"}
+              onClick={() => {
+                setKeyDetectNotImplementedMessage(null);
+                setKeyDialogOpen(true);
+              }}
+              className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
+            >
+              Detect key
+            </button>
+            <button
+              type="button"
               disabled={state.status !== "ready" || lyricsBusy || !lyricsDirty}
               onClick={() => void saveLyrics()}
               className="rounded-md bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white hover:bg-zinc-950 disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900 dark:hover:bg-white"
@@ -455,6 +645,146 @@ export function SongDetailsPage({ songId }: { songId: string }) {
           </p>
         ) : null}
       </section>
+
+      {transposeDialogOpen ? (
+        <dialog
+          ref={transposeDialogRef}
+          onClose={() => setTransposeDialogOpen(false)}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              (e.currentTarget as HTMLDialogElement).close();
+            }
+          }}
+          className="fixed left-1/2 top-1/2 w-[min(24rem,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                Transpose song
+              </h2>
+              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                Shift chords by a number of steps (positive or negative).
+              </p>
+            </div>
+            <form method="dialog">
+              <button
+                type="submit"
+                className="rounded-md px-2 py-1 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                aria-label="Close"
+              >
+                Close
+              </button>
+            </form>
+          </div>
+
+          <div className="space-y-4 px-5 py-4">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="transpose-steps"
+                className="text-sm font-medium text-zinc-800 dark:text-zinc-200"
+              >
+                Steps
+              </label>
+              <input
+                id="transpose-steps"
+                type="number"
+                inputMode="numeric"
+                value={transposeSteps}
+                onChange={(e) => {
+                  setTransposeSteps(e.target.value);
+                  setTransposeStepsError(null);
+                  setTransposeNotImplementedMessage(null);
+                }}
+                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-100"
+              />
+              {transposeStepsError ? (
+                <p className="text-sm text-red-700 dark:text-red-300">
+                  {transposeStepsError}
+                </p>
+              ) : null}
+            </div>
+
+            {transposeNotImplementedMessage ? (
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                {transposeNotImplementedMessage}
+              </p>
+            ) : null}
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  const trimmed = transposeSteps.trim();
+                  if (trimmed === "" || Number.isNaN(Number(trimmed))) {
+                    setTransposeStepsError("Enter a valid number of steps.");
+                    setTransposeNotImplementedMessage(null);
+                    return;
+                  }
+                  setTransposeStepsError(null);
+                  setTransposeNotImplementedMessage("Not implemented yet.");
+                }}
+                className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                Apply transpose
+              </button>
+            </div>
+          </div>
+        </dialog>
+      ) : null}
+
+      {keyDialogOpen ? (
+        <dialog
+          ref={keyDialogRef}
+          onClose={() => setKeyDialogOpen(false)}
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) {
+              (e.currentTarget as HTMLDialogElement).close();
+            }
+          }}
+          className="fixed left-1/2 top-1/2 w-[min(24rem,92vw)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-zinc-200 bg-white p-0 text-zinc-900 shadow-xl backdrop:bg-black/40 dark:border-zinc-800 dark:bg-zinc-950 dark:text-zinc-100"
+        >
+          <div className="flex items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4 dark:border-zinc-800">
+            <div className="min-w-0">
+              <h2 className="text-base font-semibold tracking-tight text-zinc-900 dark:text-zinc-100">
+                Detect key
+              </h2>
+              <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
+                Analyze this song to estimate its musical key. Run detection when
+                you are ready.
+              </p>
+            </div>
+            <form method="dialog">
+              <button
+                type="submit"
+                className="rounded-md px-2 py-1 text-sm text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-900"
+                aria-label="Close"
+              >
+                Close
+              </button>
+            </form>
+          </div>
+
+          <div className="space-y-4 px-5 py-4">
+            {keyDetectNotImplementedMessage ? (
+              <p className="text-sm text-amber-800 dark:text-amber-200">
+                {keyDetectNotImplementedMessage}
+              </p>
+            ) : null}
+
+            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
+              <button
+                type="button"
+                onClick={() => {
+                  setKeyDetectNotImplementedMessage("Not implemented.");
+                }}
+                className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                Detect key
+              </button>
+            </div>
+          </div>
+        </dialog>
+      ) : null}
     </main>
   );
 }

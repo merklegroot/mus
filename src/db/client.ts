@@ -46,6 +46,9 @@ function ensureRuntimeMigrations(sqlite: InstanceType<typeof Database>): void {
   if (!songColumns.some((column) => column.name === "lyrics")) {
     sqlite.exec("ALTER TABLE songs ADD COLUMN lyrics TEXT");
   }
+  if (!songColumns.some((column) => column.name === "musical_key")) {
+    sqlite.exec("ALTER TABLE songs ADD COLUMN musical_key TEXT");
+  }
 
   const tracksTable = sqlite
     .prepare(

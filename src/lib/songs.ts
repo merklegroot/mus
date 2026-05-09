@@ -91,12 +91,31 @@ export function getSongLyrics(songId: number): string | null {
   return typeof lyrics === "string" ? lyrics : null;
 }
 
+export function getSongKey(songId: number): string | null {
+  const sqlite = getSqliteDatabase();
+  const row = sqlite
+    .prepare("SELECT musical_key AS musicalKey FROM songs WHERE id = ?")
+    .get(songId) as { musicalKey?: unknown } | undefined;
+  const k = row?.musicalKey;
+  if (typeof k !== "string") return null;
+  const t = k.trim();
+  return t === "" ? null : t;
+}
+
 export function setSongLyrics(songId: number, lyrics: string | null): void {
   const sqlite = getSqliteDatabase();
   const now = Date.now();
   sqlite
     .prepare("UPDATE songs SET lyrics = ?, updated_at = ? WHERE id = ?")
     .run(lyrics, now, songId);
+}
+
+export function setSongKey(songId: number, key: string | null): void {
+  const sqlite = getSqliteDatabase();
+  const now = Date.now();
+  sqlite
+    .prepare("UPDATE songs SET musical_key = ?, updated_at = ? WHERE id = ?")
+    .run(key, now, songId);
 }
 
 export function songIdForFilename(filename: string): number | null {

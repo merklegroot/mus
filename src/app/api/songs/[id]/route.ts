@@ -1,5 +1,11 @@
 import { NextResponse } from "next/server";
-import { getSongLyrics, listSongFilenames, setSongLyrics } from "@/lib/songs";
+import {
+  getSongKey,
+  getSongLyrics,
+  listSongFilenames,
+  setSongKey,
+  setSongLyrics,
+} from "@/lib/songs";
 
 export const dynamic = "force-dynamic";
 
@@ -13,6 +19,13 @@ function parseLyrics(raw: unknown): string | null {
   if (typeof raw !== "string") return null;
   const normalized = raw.replace(/\r\n/g, "\n");
   return normalized.trim() === "" ? null : normalized;
+}
+
+function parseKey(raw: unknown): string | null {
+  if (raw === null || raw === undefined) return null;
+  if (typeof raw !== "string") return null;
+  const t = raw.trim();
+  return t === "" ? null : t;
 }
 
 export async function GET(
@@ -38,6 +51,7 @@ export async function GET(
     // Convenience: first known file for this song.
     primaryFilename: filenames[0] ?? null,
     lyrics: getSongLyrics(songId),
+    key: getSongKey(songId),
   });
 }
 
@@ -61,8 +75,27 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const lyrics = parseLyrics((body as { lyrics?: unknown }).lyrics);
-  setSongLyrics(songId, lyrics);
-  return NextResponse.json({ songId, lyrics });
+  const record = body as Record<string, unknown>;
+  const hasLyrics = Object.prototype.hasOwnProperty.call(record, "lyrics");
+  const hasKey = Object.prototype.hasOwnProperty.call(record, "key");
+  if (!hasLyrics && !hasKey) {
+    return NextResponse.json(
+      { error: "Provide lyrics and/or key to update" },
+      { status: 400 },
+    );
+  }
+
+  if (hasLyrics) {
+    setSongLyrics(songId, parseLyrics(record.lyrics));
+  }
+  if (hasKey) {
+    setSongKey(songId, parseKey(record.key));
+  }
+
+  return NextResponse.json({
+    songId,
+    lyrics: getSongLyrics(songId),
+    key: getSongKey(songId),
+  });
 }
 
