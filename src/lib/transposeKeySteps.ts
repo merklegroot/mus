@@ -59,18 +59,17 @@ export function transposeKeyLabelBySteps(
 }
 
 /**
- * Shortest signed distance in semitones between two key roots (same notion as
- * shifting a chord chart by changing key centers).
+ * Number of semitones to transpose **upward** so the tonic pitch class moves
+ * from source to destination (result in 0…11). This matches typical “transpose
+ * to key” chart moves (e.g. A→E is +7, not −5). Audio should always follow the
+ * **semitone steps** field; do not recompute from keys when encoding.
  */
-export function shortestSemitoneStepsBetweenKeys(
+export function upwardSemitoneStepsBetweenKeys(
   sourceKey: string,
   destKey: string,
 ): number | null {
   const from = keyLabelToRootChroma(sourceKey);
   const to = keyLabelToRootChroma(destKey);
   if (from === null || to === null) return null;
-  let d = to - from;
-  if (d > 6) d -= 12;
-  if (d < -6) d += 12;
-  return d;
+  return (to - from + 12) % 12;
 }

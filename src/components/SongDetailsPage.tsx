@@ -5,7 +5,7 @@ import type { ReactNode } from "react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { usePlayer } from "@/components/player/PlayerContext";
 import {
-  shortestSemitoneStepsBetweenKeys,
+  upwardSemitoneStepsBetweenKeys,
   transposeBothKeysParseable,
   transposeKeyLabelBySteps,
 } from "@/lib/transposeKeySteps";
@@ -179,7 +179,7 @@ export function SongDetailsPage({ songId }: { songId: string }) {
 
   const transposeKeyDelta = useMemo(() => {
     if (!transposeSourceKey.trim() || !transposeDestKey.trim()) return null;
-    return shortestSemitoneStepsBetweenKeys(
+    return upwardSemitoneStepsBetweenKeys(
       transposeSourceKey,
       transposeDestKey,
     );
@@ -190,7 +190,7 @@ export function SongDetailsPage({ songId }: { songId: string }) {
     setTransposeStepsError(null);
     clearTransposeApplyFeedback();
     if (!transposeBothKeysParseable(value, transposeDestKey)) return;
-    const delta = shortestSemitoneStepsBetweenKeys(value, transposeDestKey);
+    const delta = upwardSemitoneStepsBetweenKeys(value, transposeDestKey);
     if (delta !== null) setTransposeSteps(String(delta));
   }
 
@@ -199,7 +199,7 @@ export function SongDetailsPage({ songId }: { songId: string }) {
     setTransposeStepsError(null);
     clearTransposeApplyFeedback();
     if (!transposeBothKeysParseable(transposeSourceKey, value)) return;
-    const delta = shortestSemitoneStepsBetweenKeys(transposeSourceKey, value);
+    const delta = upwardSemitoneStepsBetweenKeys(transposeSourceKey, value);
     if (delta !== null) setTransposeSteps(String(delta));
   }
 
@@ -217,44 +217,29 @@ export function SongDetailsPage({ songId }: { songId: string }) {
   }
 
   async function applyTranspose(): Promise<void> {
+    const trimmed = transposeSteps.trim();
+    if (trimmed === "" || Number.isNaN(Number(trimmed))) {
+      setTransposeStepsError(
+        "Enter a valid semitone step count. When both keys are valid, they update this field.",
+      );
+      clearTransposeApplyFeedback();
+      return;
+    }
+    const semitones = Math.round(Number(trimmed));
+    if (semitones === 0) {
+      setTransposeStepsError("Use a non-zero step count to transpose.");
+      clearTransposeApplyFeedback();
+      return;
+    }
+
     const src = transposeSourceKey.trim();
     const dst = transposeDestKey.trim();
-    let semitones: number;
-    let destinationKeyLabel: string | undefined;
-
-    if (src !== "" && dst !== "") {
-      const delta = shortestSemitoneStepsBetweenKeys(src, dst);
-      if (delta === null) {
-        setTransposeStepsError("Could not parse source or destination key.");
-        clearTransposeApplyFeedback();
-        return;
-      }
-      if (delta === 0) {
-        setTransposeStepsError(
-          "Source and destination keys match; nothing to transpose.",
-        );
-        clearTransposeApplyFeedback();
-        return;
-      }
-      semitones = delta;
-      destinationKeyLabel = dst;
-    } else {
-      const trimmed = transposeSteps.trim();
-      if (trimmed === "" || Number.isNaN(Number(trimmed))) {
-        setTransposeStepsError(
-          "Enter a valid number of steps, or both source and destination keys.",
-        );
-        clearTransposeApplyFeedback();
-        return;
-      }
-      semitones = Math.round(Number(trimmed));
-      if (semitones === 0) {
-        setTransposeStepsError("Enter a non-zero number of semitone steps.");
-        clearTransposeApplyFeedback();
-        return;
-      }
-      destinationKeyLabel = undefined;
-    }
+    const destinationKeyLabel =
+      src !== "" &&
+      dst !== "" &&
+      transposeBothKeysParseable(transposeSourceKey, transposeDestKey)
+        ? dst
+        : undefined;
 
     setTransposeApplyBusy(true);
     setTransposeStepsError(null);

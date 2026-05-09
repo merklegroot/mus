@@ -129,7 +129,11 @@ export function songIdForFilename(filename: string): number | null {
   return typeof id === "number" && Number.isSafeInteger(id) && id > 0 ? id : null;
 }
 
-/** Attach an existing library filename to a song (second track for same song). */
+/**
+ * Attach a library filename to a song. If the row already exists for this
+ * song, only refreshes `updated_at`. If it exists for another song, reassigns
+ * it (same physical file cannot belong to two songs).
+ */
 export function linkSongFileToSong(songId: number, filename: string): void {
   const sqlite = getSqliteDatabase();
   const trimmed = filename.trim();
@@ -138,11 +142,22 @@ export function linkSongFileToSong(songId: number, filename: string): void {
   const taken = sqlite
     .prepare("SELECT song_id AS songId FROM song_files WHERE filename = ?")
     .get(trimmed) as { songId?: number } | undefined;
-  if (taken?.songId != null) {
-    throw new Error("That filename is already linked in the library");
+  const now = Date.now();
+  if (taken?.songId != null && Number.isSafeInteger(taken.songId)) {
+    if (taken.songId === songId) {
+      sqlite
+        .prepare("UPDATE song_files SET updated_at = ? WHERE filename = ?")
+        .run(now, trimmed);
+      return;
+    }
+    sqlite
+      .prepare(
+        "UPDATE song_files SET song_id = ?, updated_at = ? WHERE filename = ?",
+      )
+      .run(songId, now, trimmed);
+    return;
   }
 
-  const now = Date.now();
   sqlite
     .prepare(
       "INSERT INTO song_files (filename, song_id, added_at, updated_at) VALUES (?, ?, ?, ?)",
