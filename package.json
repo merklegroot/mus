@@ -13,11 +13,13 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@audio/decode-mp3": "^1.1.0",
     "better-sqlite3": "^12.9.0",
     "drizzle-orm": "^0.45.2",
     "music-metadata": "^11.12.3",
-    "node-id3": "^0.2.6",
     "next": "16.2.3",
+    "node-id3": "^0.2.6",
+    "pitch-detection": "^1.0.0",
     "react": "19.2.4",
     "react-dom": "19.2.4"
   },

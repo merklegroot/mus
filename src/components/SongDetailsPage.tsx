@@ -85,6 +85,12 @@ function formatBytes(n: number): string {
   return `${v < 10 ? v.toFixed(1) : Math.round(v)} ${units[i]}`;
 }
 
+function formatKeyMatchStrength(pearson: number): string {
+  if (!Number.isFinite(pearson)) return "—";
+  const pct = Math.min(100, Math.max(0, Math.round(((pearson + 1) / 2) * 100)));
+  return `${pct}%`;
+}
+
 function DetailRow({
   label,
   value,
@@ -138,8 +144,12 @@ export function SongDetailsPage({ songId }: { songId: string }) {
 
   const keyDialogRef = useRef<HTMLDialogElement | null>(null);
   const [keyDialogOpen, setKeyDialogOpen] = useState(false);
-  const [keyDetectNotImplementedMessage, setKeyDetectNotImplementedMessage] =
-    useState<string | null>(null);
+  const [keyDetectBusy, setKeyDetectBusy] = useState(false);
+  const [keyDetectError, setKeyDetectError] = useState<string | null>(null);
+  const [keyDetectResult, setKeyDetectResult] = useState<{
+    key: string;
+    confidence: number;
+  } | null>(null);
 
   useEffect(() => {
     const dialog = transposeDialogRef.current;
@@ -310,16 +320,15 @@ export function SongDetailsPage({ songId }: { songId: string }) {
     }
   }
 
-  async function saveKey(): Promise<void> {
-    if (state.status !== "ready") return;
+  async function patchSongKey(nextKey: string | null): Promise<boolean> {
+    if (state.status !== "ready") return false;
     setKeyBusy(true);
     setKeyError(null);
     try {
-      const trimmed = keyDraft.trim();
       const res = await fetch(`/api/songs/${encodeURIComponent(songId)}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key: trimmed === "" ? null : trimmed }),
+        body: JSON.stringify({ key: nextKey }),
       });
       const data: unknown = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -331,10 +340,10 @@ export function SongDetailsPage({ songId }: { songId: string }) {
             ? (data as { error: string }).error
             : res.statusText;
         setKeyError(message);
-        return;
+        return false;
       }
 
-      const nextKey =
+      const responseKey =
         typeof data === "object" &&
         data !== null &&
         "key" in data &&
@@ -342,27 +351,90 @@ export function SongDetailsPage({ songId }: { songId: string }) {
           ? (data as { key: unknown }).key
           : null;
 
-      if (nextKey === null) {
+      if (responseKey === null) {
         setKeyDraft("");
-      } else if (typeof nextKey === "string") {
-        setKeyDraft(nextKey);
+      } else if (typeof responseKey === "string") {
+        setKeyDraft(responseKey);
       }
       setKeyDirty(false);
 
       setState((prev) => {
         if (prev.status !== "ready") return prev;
         const song = { ...prev.song };
-        if (nextKey === null) {
+        if (responseKey === null) {
           song.key = null;
-        } else if (typeof nextKey === "string") {
-          song.key = nextKey;
+        } else if (typeof responseKey === "string") {
+          song.key = responseKey;
         }
         return { ...prev, song };
       });
+      return true;
     } catch (err) {
       setKeyError(err instanceof Error ? err.message : String(err));
+      return false;
     } finally {
       setKeyBusy(false);
+    }
+  }
+
+  async function saveKey(): Promise<void> {
+    const trimmed = keyDraft.trim();
+    await patchSongKey(trimmed === "" ? null : trimmed);
+  }
+
+  async function runKeyDetection(): Promise<void> {
+    setKeyDetectBusy(true);
+    setKeyDetectError(null);
+    setKeyDetectResult(null);
+    try {
+      const res = await fetch(
+        `/api/songs/${encodeURIComponent(songId)}/detect-key`,
+        { method: "POST" },
+      );
+      const data: unknown = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const message =
+          typeof data === "object" &&
+          data !== null &&
+          "error" in data &&
+          typeof (data as { error: unknown }).error === "string"
+            ? (data as { error: string }).error
+            : res.statusText;
+        setKeyDetectError(message);
+        return;
+      }
+      const k =
+        typeof data === "object" &&
+        data !== null &&
+        "key" in data &&
+        typeof (data as { key: unknown }).key === "string"
+          ? (data as { key: string }).key
+          : null;
+      const conf =
+        typeof data === "object" &&
+        data !== null &&
+        "confidence" in data &&
+        typeof (data as { confidence: unknown }).confidence === "number"
+          ? (data as { confidence: number }).confidence
+          : Number.NaN;
+      if (!k) {
+        setKeyDetectError("Invalid detection response");
+        return;
+      }
+      setKeyDetectResult({ key: k, confidence: conf });
+    } catch (err) {
+      setKeyDetectError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setKeyDetectBusy(false);
+    }
+  }
+
+  async function applyDetectedKeyToSong(): Promise<void> {
+    if (!keyDetectResult) return;
+    const ok = await patchSongKey(keyDetectResult.key);
+    if (ok) {
+      setKeyDialogOpen(false);
+      setKeyDetectResult(null);
     }
   }
 
@@ -607,9 +679,13 @@ export function SongDetailsPage({ songId }: { songId: string }) {
             </button>
             <button
               type="button"
-              disabled={state.status !== "ready"}
+              disabled={
+                state.status !== "ready" || state.song.filenames.length === 0
+              }
               onClick={() => {
-                setKeyDetectNotImplementedMessage(null);
+                setKeyDetectBusy(false);
+                setKeyDetectError(null);
+                setKeyDetectResult(null);
                 setKeyDialogOpen(true);
               }}
               className="rounded-md border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-zinc-800 hover:bg-zinc-50 disabled:opacity-50 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-200 dark:hover:bg-zinc-900"
@@ -735,7 +811,12 @@ export function SongDetailsPage({ songId }: { songId: string }) {
       {keyDialogOpen ? (
         <dialog
           ref={keyDialogRef}
-          onClose={() => setKeyDialogOpen(false)}
+          onClose={() => {
+            setKeyDialogOpen(false);
+            setKeyDetectBusy(false);
+            setKeyDetectError(null);
+            setKeyDetectResult(null);
+          }}
           onMouseDown={(e) => {
             if (e.target === e.currentTarget) {
               (e.currentTarget as HTMLDialogElement).close();
@@ -749,8 +830,8 @@ export function SongDetailsPage({ songId }: { songId: string }) {
                 Detect key
               </h2>
               <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-                Analyze this song to estimate its musical key. Run detection when
-                you are ready.
+                Analyzes the first linked MP3 (up to about two minutes) using a
+                chroma-based key estimator. Results are approximate.
               </p>
             </div>
             <form method="dialog">
@@ -765,23 +846,48 @@ export function SongDetailsPage({ songId }: { songId: string }) {
           </div>
 
           <div className="space-y-4 px-5 py-4">
-            {keyDetectNotImplementedMessage ? (
-              <p className="text-sm text-amber-800 dark:text-amber-200">
-                {keyDetectNotImplementedMessage}
+            <div className="flex flex-wrap justify-end gap-2">
+              <button
+                type="button"
+                disabled={keyDetectBusy || state.status !== "ready"}
+                onClick={() => void runKeyDetection()}
+                className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+              >
+                {keyDetectBusy ? "Analyzing…" : "Run detection"}
+              </button>
+            </div>
+
+            {keyDetectError ? (
+              <p className="text-sm text-red-700 dark:text-red-300">
+                {keyDetectError}
               </p>
             ) : null}
 
-            <div className="flex flex-wrap justify-end gap-2 border-t border-zinc-200 pt-4 dark:border-zinc-800">
-              <button
-                type="button"
-                onClick={() => {
-                  setKeyDetectNotImplementedMessage("Not implemented.");
-                }}
-                className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
-              >
-                Detect key
-              </button>
-            </div>
+            {keyDetectResult ? (
+              <div className="space-y-3 rounded-lg border border-zinc-200 bg-zinc-50 px-3 py-3 text-sm dark:border-zinc-700 dark:bg-zinc-900/50">
+                <p className="text-zinc-800 dark:text-zinc-100">
+                  <span className="text-zinc-500 dark:text-zinc-400">
+                    Detected key
+                  </span>{" "}
+                  <span className="font-semibold tabular-nums">
+                    {keyDetectResult.key}
+                  </span>
+                </p>
+                <p className="text-xs text-zinc-600 dark:text-zinc-400">
+                  Match strength{" "}
+                  {formatKeyMatchStrength(keyDetectResult.confidence)} (profile
+                  correlation; higher usually means a clearer estimate).
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void applyDetectedKeyToSong()}
+                  disabled={keyBusy}
+                  className="rounded-md bg-zinc-950 px-3 py-2 text-sm font-medium text-white hover:bg-zinc-800 disabled:opacity-50 dark:bg-zinc-50 dark:text-zinc-950 dark:hover:bg-zinc-200"
+                >
+                  {keyBusy ? "Saving…" : "Save to song"}
+                </button>
+              </div>
+            ) : null}
           </div>
         </dialog>
       ) : null}
