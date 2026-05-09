@@ -86,6 +86,7 @@ export function PlayerDock() {
     showPlayer,
     playQueuedNow,
     removeFromQueue,
+    removeCurrentTrack,
   } = usePlayer();
 
   const showExpandedPlayerDock = Boolean(playingFilename && isPlayerVisible);
@@ -113,8 +114,19 @@ export function PlayerDock() {
                 <span className="min-w-0 flex-1 truncate font-semibold text-zinc-950 dark:text-zinc-50">
                   {playingFilename}
                 </span>
-                <span className="shrink-0 rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-semibold text-white dark:bg-emerald-500 dark:text-emerald-950">
-                  {isPlayerPlaying ? "Now playing" : "In player"}
+                <span className="inline-flex shrink-0 items-center gap-0.5">
+                  <span className="rounded-full bg-emerald-700 px-2 py-0.5 text-[11px] font-semibold text-white dark:bg-emerald-500 dark:text-emerald-950">
+                    {isPlayerPlaying ? "Now playing" : "In player"}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={removeCurrentTrack}
+                    aria-label={`Remove ${playingFilename} from queue`}
+                    title="Remove from queue"
+                    className="inline-flex size-6 items-center justify-center rounded-md border border-emerald-300 text-emerald-800 hover:border-red-400 hover:bg-red-50 hover:text-red-700 dark:border-emerald-700 dark:text-emerald-200 dark:hover:border-red-500 dark:hover:bg-red-950/40 dark:hover:text-red-300"
+                  >
+                    <RemoveFromQueueIcon className="size-3.5" />
+                  </button>
                 </span>
               </li>
               {queueFilenames.map((filename, index) => (
