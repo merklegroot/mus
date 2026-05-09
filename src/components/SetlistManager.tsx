@@ -29,10 +29,33 @@ type SongRow = {
   songId: number;
   filename: string;
   artist: string | null;
+  /** ID3 / library title when known */
+  title?: string | null;
   album: string | null;
   excludedFromSetlists?: boolean;
   artistExcludedFromSetlists?: boolean;
 };
+
+/** Primary line is title when present; otherwise the filename. Secondary is artist when non-empty. */
+function songListPrimarySecondary(song: Pick<SongRow, "filename" | "title" | "artist">): {
+  primary: string;
+  secondary: string | null;
+} {
+  const filename = song.filename;
+  const title =
+    typeof song.title === "string" && song.title.trim() !== ""
+      ? song.title.trim()
+      : null;
+  const artist =
+    typeof song.artist === "string" && song.artist.trim() !== ""
+      ? song.artist.trim()
+      : null;
+
+  if (title) {
+    return { primary: title, secondary: artist };
+  }
+  return { primary: filename, secondary: artist };
+}
 
 function PlayIcon({ className }: { className?: string }) {
   return (
@@ -281,7 +304,12 @@ export function SetlistManager() {
     if (terms.length === 0) return availableSongs;
 
     return availableSongs.filter((song) => {
-      const searchable = [song.filename, song.artist, song.album]
+      const searchable = [
+        song.filename,
+        song.title,
+        song.artist,
+        song.album,
+      ]
         .filter((value): value is string => typeof value === "string")
         .join(" ")
         .toLowerCase();
@@ -307,6 +335,14 @@ export function SetlistManager() {
       if (typeof s.filename === "string" && typeof s.songId === "number") {
         map.set(s.filename, s.songId);
       }
+    }
+    return map;
+  }, [songs]);
+
+  const songByFilename = useMemo(() => {
+    const map = new Map<string, SongRow>();
+    for (const s of songs) {
+      map.set(s.filename, s);
     }
     return map;
   }, [songs]);
@@ -783,6 +819,12 @@ export function SetlistManager() {
                         <ul className="max-h-72 overflow-y-auto">
                           {visibleSongMatches.map((song) => {
                             const isChosen = songToAdd === song.filename;
+                            const { primary, secondary } =
+                              songListPrimarySecondary(song);
+                            const hasTitleLine =
+                              typeof song.title === "string" &&
+                              song.title.trim() !== "";
+
                             return (
                               <li key={song.filename}>
                                 <button
@@ -799,14 +841,18 @@ export function SetlistManager() {
                                       : "hover:bg-zinc-100 dark:hover:bg-zinc-900"
                                   }`}
                                 >
-                                  <span className="block break-all text-sm font-medium text-zinc-950 dark:text-zinc-50">
-                                    {song.filename}
+                                  <span
+                                    className={`block text-zinc-950 dark:text-zinc-50 ${
+                                      hasTitleLine
+                                        ? "truncate text-base font-semibold tracking-tight"
+                                        : "break-all text-sm font-medium"
+                                    }`}
+                                  >
+                                    {primary}
                                   </span>
-                                  {song.artist || song.album ? (
+                                  {secondary ? (
                                     <span className="mt-0.5 block truncate text-xs font-normal text-zinc-500 dark:text-zinc-400">
-                                      {[song.artist, song.album]
-                                        .filter(Boolean)
-                                        .join(" - ")}
+                                      {secondary}
                                     </span>
                                   ) : null}
                                 </button>
@@ -860,6 +906,17 @@ export function SetlistManager() {
                           dropTarget?.filename === track.filename
                             ? dropTarget.placement
                             : null;
+                        const meta = songByFilename.get(track.filename);
+                        const { primary, secondary } = meta
+                          ? songListPrimarySecondary(meta)
+                          : {
+                              primary: track.filename,
+                              secondary: null,
+                            };
+                        const hasTitleLine =
+                          !!meta &&
+                          typeof meta.title === "string" &&
+                          meta.title.trim() !== "";
 
                         return (
                           <li
@@ -937,7 +994,7 @@ export function SetlistManager() {
                                 type="button"
                                 disabled={busy || index === 0}
                                 onClick={() => moveTrackByOne(track.filename, -1)}
-                                aria-label={`Move ${track.filename} up`}
+                                aria-label={`Move ${primary} up`}
                                 title="Move up"
                                 className="rounded-md px-1.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
                               >
@@ -949,7 +1006,7 @@ export function SetlistManager() {
                                   busy || index === selected.tracks.length - 1
                                 }
                                 onClick={() => moveTrackByOne(track.filename, 1)}
-                                aria-label={`Move ${track.filename} down`}
+                                aria-label={`Move ${primary} down`}
                                 title="Move down"
                                 className="rounded-md px-1.5 py-1 text-xs font-semibold text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 disabled:cursor-not-allowed disabled:opacity-30 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
                               >
@@ -971,7 +1028,7 @@ export function SetlistManager() {
                                   setDropTarget(null);
                                 }}
                                 disabled={busy}
-                                aria-label={`Drag ${track.filename} to reorder`}
+                                aria-label={`Drag ${primary} to reorder`}
                                 title="Drag to reorder"
                                 className="cursor-grab rounded-md px-2 py-1 text-zinc-500 hover:bg-zinc-100 hover:text-zinc-800 active:cursor-grabbing disabled:cursor-not-allowed disabled:opacity-50 dark:hover:bg-zinc-900 dark:hover:text-zinc-100"
                               >
@@ -988,9 +1045,20 @@ export function SetlistManager() {
                                 {index + 1}.
                               </span>
                               <span className="min-w-0 flex-1">
-                                <span className="block break-all text-zinc-900 dark:text-zinc-100">
-                                  {track.filename}
+                                <span
+                                  className={`block ${
+                                    hasTitleLine
+                                      ? "truncate text-base font-semibold tracking-tight text-zinc-950 dark:text-zinc-50"
+                                      : "break-all text-sm font-normal text-zinc-900 dark:text-zinc-100"
+                                  }`}
+                                >
+                                  {primary}
                                 </span>
+                                {secondary ? (
+                                  <span className="mt-0.5 block truncate text-xs font-normal text-zinc-500 dark:text-zinc-400">
+                                    {secondary}
+                                  </span>
+                                ) : null}
                                 {isSelectedSong ? (
                                   <span className="mt-0.5 block text-xs text-sky-700 dark:text-sky-300">
                                     Selected. Edit key and notes in the side
