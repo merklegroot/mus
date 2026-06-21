@@ -8,6 +8,11 @@ import { usePlayer } from "@/components/player/PlayerContext";
 import { ArtistList } from "@/components/ArtistList";
 import { InferFromFilenamePanel } from "@/components/InferFromFilenamePanel";
 import { inferArtistTitleFromFilename } from "@/lib/inferArtistTitleFromFilename";
+import {
+  albumMatches,
+  songMatchesArtistFilter,
+  songMatchesTextFilter,
+} from "@/lib/songLibraryFilter";
 
 type SongRow = {
   songId: number;
@@ -109,31 +114,6 @@ function parseSongsResponse(data: unknown):
  * Match /api/artists semantics: ID3 artist or filename inference counts;
  * synthetic "Unknown" when the merged artist from the API is empty.
  */
-function songMatchesArtistFilter(s: SongRow, filterArtist: string): boolean {
-  const want = filterArtist.trim();
-  if (want === "") return false;
-
-  if (want === "Unknown") {
-    return (s.artist?.trim() ?? "") === "";
-  }
-
-  const merged = s.artist?.trim() ?? "";
-  if (merged === want) return true;
-
-  const inferred =
-    inferArtistTitleFromFilename(s.filename).primary.artist?.trim() ?? "";
-  return inferred === want;
-}
-
-function albumMatches(
-  songAlbum: string | null,
-  filterAlbum: string,
-): boolean {
-  const a = songAlbum?.trim() ?? "";
-  const b = filterAlbum.trim();
-  return a.length > 0 && a === b;
-}
-
 function songListDisplay(s: SongRow):
   | { kind: "metadata"; artist: string | null; title: string }
   | { kind: "filename"; filename: string } {
@@ -214,6 +194,7 @@ export function MusicLibraryControl() {
   });
   const [filterArtist, setFilterArtist] = useState<string | null>(null);
   const [filterAlbum, setFilterAlbum] = useState<string | null>(null);
+  const [songSearch, setSongSearch] = useState("");
   const [selected, setSelected] = useState<string | null>(null);
   const [bulkSelected, setBulkSelected] = useState<string[]>([]);
   const [bulkAnchor, setBulkAnchor] = useState<string | null>(null);
@@ -291,9 +272,12 @@ export function MusicLibraryControl() {
       if (filterAlbum && !albumMatches(s.album, filterAlbum)) {
         return false;
       }
+      if (!songMatchesTextFilter(s, songSearch)) {
+        return false;
+      }
       return true;
     });
-  }, [state, filterArtist, filterAlbum]);
+  }, [state, filterArtist, filterAlbum, songSearch]);
 
   const bulkSet = useMemo(() => new Set(bulkSelected), [bulkSelected]);
   const bulkVisibleCount = useMemo(() => {
@@ -340,16 +324,17 @@ export function MusicLibraryControl() {
 
   const albumList = useMemo(() => {
     if (state.status !== "ready") return [];
-    const scope = filterArtist
-      ? state.songs.filter((s) => songMatchesArtistFilter(s, filterArtist))
-      : state.songs;
+    let scope = state.songs.filter((s) => songMatchesTextFilter(s, songSearch));
+    if (filterArtist) {
+      scope = scope.filter((s) => songMatchesArtistFilter(s, filterArtist));
+    }
     const seen = new Set<string>();
     for (const s of scope) {
       const a = s.album?.trim();
       if (a) seen.add(a);
     }
     return [...seen].sort((a, b) => a.localeCompare(b));
-  }, [state, filterArtist]);
+  }, [state, filterArtist, songSearch]);
 
   const albumListStatus: "loading" | "error" | "empty" | "ready" =
     state.status === "loading"
@@ -583,7 +568,7 @@ export function MusicLibraryControl() {
     state.status === "ready" ? state.songs : null;
 
   useEffect(() => {
-    if ((!filterArtist && !filterAlbum) || !selected || !songsForFilter) {
+    if ((!filterArtist && !filterAlbum && songSearch.trim() === "") || !selected || !songsForFilter) {
       return;
     }
     const stillVisible = songsForFilter.some((s) => {
@@ -594,6 +579,9 @@ export function MusicLibraryControl() {
       if (filterAlbum && !albumMatches(s.album, filterAlbum)) {
         return false;
       }
+      if (!songMatchesTextFilter(s, songSearch)) {
+        return false;
+      }
       return true;
     });
     if (!stillVisible) {
@@ -601,7 +589,21 @@ export function MusicLibraryControl() {
       // doesn't immediately re-select the now-filtered-out filename.
       setBulkSelected([]);
     }
-  }, [filterArtist, filterAlbum, selected, songsForFilter]);
+  }, [filterArtist, filterAlbum, songSearch, selected, songsForFilter]);
+
+  useEffect(() => {
+    if (!filterArtist || state.status !== "ready" || songSearch.trim() === "") {
+      return;
+    }
+    const stillVisible = state.songs.some(
+      (s) =>
+        songMatchesTextFilter(s, songSearch) &&
+        songMatchesArtistFilter(s, filterArtist),
+    );
+    if (!stillVisible) {
+      setFilterArtist(null);
+    }
+  }, [filterArtist, songSearch, state]);
 
   useEffect(() => {
     if (!selected) return;
@@ -647,13 +649,60 @@ export function MusicLibraryControl() {
     "rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
 
   return (
-    <div className="grid w-full grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-4 lg:items-stretch">
+    <>
+      {state.status === "ready" ? (
+        <section
+          className={`${panelClass} shrink-0`}
+          aria-label="Library filter"
+        >
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <label className="min-w-0 flex-1 text-xs font-medium text-zinc-700 dark:text-zinc-300">
+              Filter library
+              <input
+                type="search"
+                value={songSearch}
+                onChange={(event) => setSongSearch(event.target.value)}
+                placeholder="Search by song, artist, or album"
+                className="mt-1 block w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-950 outline-none focus:border-zinc-500 dark:border-zinc-700 dark:bg-zinc-950 dark:text-zinc-50"
+              />
+            </label>
+            {filterArtist || filterAlbum || songSearch.trim() !== "" ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setFilterArtist(null);
+                  setFilterAlbum(null);
+                  setSongSearch("");
+                }}
+                className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
+              >
+                Clear filters
+              </button>
+            ) : null}
+          </div>
+          {songSearch.trim() !== "" ? (
+            <p className="mt-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">
+              {visibleSongs.length} song
+              {visibleSongs.length === 1 ? "" : "s"} · {albumList.length} album
+              {albumList.length === 1 ? "" : "s"}
+            </p>
+          ) : (
+            <p className="mt-2 text-xs font-normal text-zinc-500 dark:text-zinc-400">
+              Type to narrow artists, albums, and songs.
+            </p>
+          )}
+        </section>
+      ) : null}
+
+      <div className="grid w-full grid-cols-1 gap-4 sm:gap-6 lg:grid-cols-4 lg:items-stretch">
       <div
         className={`flex h-full min-h-0 min-w-0 flex-col lg:max-h-[min(90vh,56rem)] ${selected ? "max-lg:hidden" : ""}`}
       >
         <ArtistList
           showDiscogsActions={false}
-          selectedArtist={null}
+          selectedArtist={filterArtist}
+          textFilter={songSearch}
+          librarySongs={state.status === "ready" ? state.songs : undefined}
           onArtistClick={(artist) => {
             setFilterArtist((prev) => (prev === artist ? null : artist));
           }}
@@ -678,14 +727,10 @@ export function MusicLibraryControl() {
               prev?.status === "ready" &&
               songMatchesArtistFilter(
                 {
-                  songId: prev.data.songId,
                   filename: prev.data.filename,
                   artist: prev.data.artist,
                   title: prev.data.title,
                   album: prev.data.album,
-                  excludedFromSetlists: prev.data.excludedFromSetlists,
-                  artistExcludedFromSetlists:
-                    prev.data.artistExcludedFromSetlists,
                 },
                 artist,
               )
@@ -710,6 +755,7 @@ export function MusicLibraryControl() {
           errorMessage={state.status === "error" ? state.message : undefined}
           albums={albumList}
           filterArtist={filterArtist}
+          textFilter={songSearch}
           onAlbumClick={(album) => {
             setFilterAlbum((prev) => (prev === album ? null : album));
           }}
@@ -736,18 +782,6 @@ export function MusicLibraryControl() {
               </span>
             ) : null}
           </h2>
-          {filterArtist || filterAlbum ? (
-            <button
-              type="button"
-              onClick={() => {
-                setFilterArtist(null);
-                setFilterAlbum(null);
-              }}
-              className="shrink-0 rounded-md px-2 py-1 text-xs font-medium text-zinc-700 hover:bg-zinc-100 dark:text-zinc-300 dark:hover:bg-zinc-800/60"
-            >
-              Clear filters
-            </button>
-          ) : null}
         </div>
         {bulkSelected.length > 1 ? (
           <div className="mb-3 flex items-center justify-between gap-2 text-sm">
@@ -792,6 +826,7 @@ export function MusicLibraryControl() {
               onClick={() => {
                 setFilterArtist(null);
                 setFilterAlbum(null);
+                setSongSearch("");
               }}
             >
               Clear filters
@@ -1325,6 +1360,7 @@ export function MusicLibraryControl() {
         </aside>
       ) : null}
     </div>
+    </>
   );
 }
 

@@ -1,7 +1,12 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import {
+  type FilterableSong,
+  songMatchesArtistFilter,
+  songMatchesTextFilter,
+} from "@/lib/songLibraryFilter";
 
 type DiscogsFetchState =
   | { status: "idle" }
@@ -54,6 +59,8 @@ export function ArtistList({
   onArtistSetlistVisibilityChanged,
   reloadToken,
   showDiscogsActions = true,
+  textFilter = "",
+  librarySongs,
 }: {
   selectedArtist: string | null;
   onArtistClick: (artist: string) => void;
@@ -64,6 +71,9 @@ export function ArtistList({
   ) => void;
   reloadToken?: number;
   showDiscogsActions?: boolean;
+  /** When set with library songs, narrows the list to artists with matching tracks. */
+  textFilter?: string;
+  librarySongs?: FilterableSong[];
 }) {
   const [state, setState] = useState<ArtistListState>({ status: "loading" });
   const [discogs, setDiscogs] = useState<DiscogsFetchState>({ status: "idle" });
@@ -74,6 +84,19 @@ export function ArtistList({
     state.status === "ready" && selectedArtist
       ? state.artists.find((artist) => artist.name === selectedArtist) ?? null
       : null;
+
+  const visibleArtists = useMemo(() => {
+    if (state.status !== "ready") return [];
+    const trimmedFilter = textFilter.trim();
+    if (trimmedFilter === "" || !librarySongs) return state.artists;
+    return state.artists.filter((artist) =>
+      librarySongs.some(
+        (song) =>
+          songMatchesTextFilter(song, trimmedFilter) &&
+          songMatchesArtistFilter(song, artist.name),
+      ),
+    );
+  }, [librarySongs, state, textFilter]);
 
   useEffect(() => {
     let cancelled = false;
@@ -305,13 +328,15 @@ export function ArtistList({
         <p className="text-sm text-red-600 dark:text-red-400">
           {state.message}
         </p>
-      ) : state.artists.length === 0 ? (
+      ) : visibleArtists.length === 0 ? (
         <p className="text-sm text-zinc-500">
-          No artists from ID3 tags or inferred from filenames in this folder.
+          {textFilter.trim()
+            ? "No artists match the current filter."
+            : "No artists from ID3 tags or inferred from filenames in this folder."}
         </p>
       ) : (
         <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm text-zinc-800 dark:text-zinc-200">
-          {state.artists.map((artist) => (
+          {visibleArtists.map((artist) => (
             <li
               key={artist.name}
               className="flex min-w-0 items-stretch gap-1 break-words py-0.5 pr-1"

@@ -10,6 +10,8 @@ type AlbumListProps = {
   onClearArtistFilter: () => void;
   /** When set, albums are scoped to this artist; used only for empty copy. */
   filterArtist: string | null;
+  /** Active library text filter; used only for empty copy. */
+  textFilter?: string;
 };
 
 export function AlbumList({
@@ -19,6 +21,7 @@ export function AlbumList({
   onAlbumClick,
   onClearArtistFilter,
   filterArtist,
+  textFilter = "",
 }: AlbumListProps) {
   const panelClass =
     "flex h-full min-h-0 w-full min-w-0 flex-col rounded-lg border border-zinc-200 bg-zinc-50/80 p-4 text-left dark:border-zinc-800 dark:bg-zinc-900/40";
@@ -56,9 +59,11 @@ export function AlbumList({
         <p className="text-sm text-zinc-500">No .mp3 files in this folder.</p>
       ) : albums.length === 0 ? (
         <p className="text-sm text-zinc-500">
-          {filterArtist
-            ? "No album tags for songs by this artist."
-            : "No album tags in the database for this folder yet."}
+          {textFilter.trim()
+            ? "No albums match the current filter."
+            : filterArtist
+              ? "No album tags for songs by this artist."
+              : "No album tags in the database for this folder yet."}
         </p>
       ) : (
         <ul className="min-h-0 flex-1 space-y-0.5 overflow-y-auto text-sm text-zinc-800 dark:text-zinc-200">
